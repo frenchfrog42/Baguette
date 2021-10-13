@@ -1,0 +1,2 @@
+language = "nix"
+run = "racket -f examples/first-example.rkt -i"
