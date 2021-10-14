@@ -3,6 +3,13 @@
 (require "../compilation.rkt")
 (require "../vyper.rkt")
 
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Counter with manual memory management
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define compteur '(public (tx-arg amount-arg)
                           (define scriptCode (call getScriptCode (tx-arg)))
                           (define counter (call bin2num (bytes-get-last scriptCode 1)))
@@ -12,11 +19,37 @@
                           (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
                     ))
 
-(contract->opcodes compteur) ; Fonctionne
+(contract->opcodes compteur) ; Fonctionne. 187bytes
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Counter with garbage collection
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (contract->opcodes
  (garbage-collector
-  (remove-destroy-variable compteur) #f)) ;Fonctionne
+  (remove-destroy-variable compteur) #f)) ; Fonctionne. 202bytes
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Counter with state
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define compteur-state (vyper-create-final '(compteur)
+                                            '((public () (modify compteur (+ 1 compteur))))))
+
+(contract->opcodes compteur-state) ; Fonctionne. 327 bytes
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Counter with experimental features
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define compteur-opt '(public (tx-arg amount-arg)
                               (define scriptCode-with-header (call getScriptCode-with-header (tx-arg)))
@@ -27,17 +60,5 @@
                               (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
                               ))
 
-(contract->opcodes compteur-opt #f) ; Dans le code faut remplacer s1 par 3d. Fonctionne. 3d = 59
-
-
-(define compteur-state (vyper-create-final '(compteur)
-                                            '((public () (modify compteur (+ 1 compteur))))))
-
-(contract->opcodes compteur-state) ; Fonctionne
-
-(+ 1
-   (+ 2 3)
-   (+ 4 5)
-        )
-
-(subcontract->size '(+ a a))
+; In the script code you need to replace s1 with 3d (which is 59). Todo write a code that does this
+(contract->opcodes compteur-opt #f) ; Fonctionne. 57bytes

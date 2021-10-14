@@ -24,7 +24,7 @@
     ;roll
     ("roll0" '("//roll0"))
     ("roll1" '("OP_SWAP"))
-    ("roll1" '("OP_ROT"))
+    ("roll2" '("OP_ROT"))
     ((regexp #rx"roll*") (list (~a "OP_" (substring s 4)) "OP_ROLL"))
     ;drop
     ("drop0" '("OP_DROP"))
@@ -115,13 +115,11 @@
            (println stackbis)
            (/ 1 0))))))
 
+; Obvious pattern to remove
 (define (naive-opt expr)
-  (match expr
-    ((list* "OP_SWAP" "OP_ADD" reste) (naive-opt (list* "OP_ADD" reste)))
-    ((list* "OP_SWAP" "OP_MUL" reste) (naive-opt (list* "OP_MUL" reste)))
-    ((cons a b) (cons a (naive-opt b)))
-    ('() '())))
+  (regexp-replace #rx"OP_SWAP OP_SWAP " expr ""))
 
+; Compilation of non commutative binary operation
 (define (compile-binary-op-all-no-commute op expr)
   (append
    ; a b +
@@ -134,6 +132,7 @@
          ;(displayln res)
          res)))))
 
+; Compilation of commutative binary operation
 (define (compile-binary-op-all op expr)
   ; We want to compile (+ a b)
   ; Here is all the way to compile it
@@ -157,7 +156,8 @@
    (let ((un (compile-expr-all (first expr)))
          (deux (compile-expr-all (second expr))))
      (define all-comb (cartesian-product deux un))
-     (let ((res (for/list ((e all-comb)) (append (first e) (list "OP_TOALTSTACK") (second e) (list "OP_FROMALTSTACK") (list op))))) res))))
+     (let ((res (for/list ((e all-comb)) (append (first e) (list "OP_TOALTSTACK") (second e) (list "OP_FROMALTSTACK") (list op))))) res)))
+  )
 
 ; Prends une liste de liste d'option et forme le produit
 (define (recursive-product l)
@@ -428,20 +428,33 @@
 ;(define (comp-save-all e) (save-stack (compile-expr-all e)))
 ; contract->ir = compile-expr-all
 (define (ir->opcodes c)
-  (string-join (filter (lambda (s) (not (equal? "//" (substring s 0 2))))
+  (string-join (filter (lambda (s) (or (= (string-length s) 1) (not (equal? "//" (substring s 0 2)))))
                                    (flatten (map to-opcode
                                                  (flatten (map (lambda (a) (string-split a " "))
                                                                (flatten c))))))))
 
-(define (opcodes->size c) (length (string-split c " "))) ; todo faire le vrai calcul (et voir si ya un +1 ou pas
+(define (opcodes->size c) (length (string-split c " ")))
 
 (define (contract->opcodes c (keep-args-order #t))
-  (set-approx #f) (set-stack '()) ;make sure approx is off and stack is empty
-  (define allcomp (map ir->opcodes (compile-expr-all c)))
-  (define res (if keep-args-order (last allcomp) (argmin opcodes->size allcomp))) ; todo prendre l'argmin dans le 1er cas aussi         
-  (printf "Size of contract: approx ~a bytes~n" (opcodes->size res))
-  (println res))
+  (set-approx #f) (set-stack '()) ; make sure approx is off and stack is empty
+  (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all c)))) ; ir->opcodes and naive opt
+  ; match on if we compile a contract or not
+  (define is-contract (equal? 'public (first c)))
+  (if is-contract
+      (let ()
+        (printf (~a "You are compiling a public function, with" (if keep-args-order "out changing the order of your args" " any order of arguments") "\n"))
+        (define opt-res (argmin opcodes->size allcomp))
+        (define res (if keep-args-order (argmin opcodes->size (filter (lambda (c) (equal? (string-split c " || ") (string-split (last allcomp) " || "))) allcomp)) opt-res))
+        (define code-function (second (string-split res " || ")))
+        (printf (~a "Size of your function: " (length (string-split code-function)) (if keep-args-order (~a ", by allowing the changing order, the size would be " (length (string-split (second (string-split opt-res " || "))))) "") "\n"))
+        (printf (~a "Order of arguments: " (car (string-split res " || ")) "\n"))
+        (if (not keep-args-order) (printf (~a "Original order: " (car (string-split (last allcomp) " || ")) "\n")) '())
+        (printf (~a "Code of the contract: " code-function "\n\n")))
+      '()))
 
+;(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))))
+;(contract->opcodes '(public (b a) (+ (destroy a) (destroy b))) #f)
+  
 (define (subcontract->size c)
   (set-approx #t)
   (define allcomp (map ir->opcodes (compile-expr-all c)))
