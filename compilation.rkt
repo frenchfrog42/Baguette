@@ -461,7 +461,6 @@
             (let ()
               (printf (~a "You are compiling a public function, with" (if keep-args-order "out changing the order of your args" " any order of arguments") "\n"))
               (define opt-res (argmin opcodes->size allcomp))
-              (displayln (filter (lambda (c) (equal? (string-split c " || ") (string-split (last allcomp) " || "))) allcomp))
               (define res (if keep-args-order (argmin opcodes->size (filter (lambda (c) (equal? (first (string-split c " || ")) (first (string-split (last allcomp) " || ")))) allcomp)) opt-res))
               (define code-function (second (string-split res " || ")))
               (printf (~a "Order of arguments: " (car (string-split res " || ")) "\n"))
@@ -472,8 +471,8 @@
             ; else: it's something else
             (argmin opcodes->size allcomp)))))
 
-;(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))))
-;(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))) #f)
+(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))))
+(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))) #f)
 ;(contract->opcodes '(contract (public (a b c) (+ (destroy a) (destroy b)))))
 ;(contract->opcodes '(contract (public (a b c) (+ (destroy a) (destroy b)))) #f)
   
