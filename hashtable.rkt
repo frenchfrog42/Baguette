@@ -12,8 +12,8 @@
     (ligne (values ligne liste))
   ))
 
-(unroll-addhint '(add-hint 2 "o") '())
-(unroll-addhint '(define tmp (cons (add-hint 2 "o") 4)) '())
+;(unroll-addhint '(add-hint 2 "o") '())
+;(unroll-addhint '(define tmp (cons (add-hint 2 "o") 4)) '())
 
 ; déroule les opérations de hash, notamment en ajoutant les hints
 (define (unroll-hashtable-operation code nb)
@@ -65,7 +65,7 @@
     (_ (values code nb))
     ))
 
-(unroll-hashtable-operation '((define a 2) (define b (hashtable-lookup (hashtable-lookup mm 3) 2))) 0)
+;(unroll-hashtable-operation '((define a 2) (define b (hashtable-lookup (hashtable-lookup mm 3) 2))) 0)
 
 ; branche tout ensemble
 (define (unroll-addhint-final fonction (is-public-fonction #t))
@@ -86,4 +86,4 @@
 (provide (all-defined-out))
 
 
-(unroll-addhint-final '(public (args) (define a 2) (define b (hashtable-lookup (hashtable-lookup mm 3) 2))))
+;(unroll-addhint-final '(public (args) (define a 2) (define b (hashtable-lookup (hashtable-lookup mm 3) 2))))
