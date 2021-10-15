@@ -12,6 +12,6 @@
 
 (contract->opcodes test-contract)
 
-(printf "~nYou can now type in the repl any (contract->opcodes whatever) command to compile code !~nPlease try (contract->opcodes '(+ 1 2))~n")
+(printf "You can now type in the repl any (contract->opcodes whatever) command to compile code !~nPlease try (contract->opcodes '(+ 1 2))~n")
 (printf "Please also try (contract->opcodes '(public (secret) (= (destroy secret) 12)))~n")
 (printf "(To copy paste press Ctrl+Shift+C and Ctrl+Shift+V)~n~n")
