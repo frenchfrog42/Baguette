@@ -55,25 +55,27 @@
                                                       ))
                              ))
 
+(define (with-hashmap l)
+  (map (lambda (a) (unroll-addhint-final-vyper a)) l))
 (contract->opcodes (vyper-create-final
                      '(map)
-                     (list
-                      '(public (key value hint) (drop key) (drop value) (drop hint))
-                      ;'(public (key value) (verify = (destroy value) (hashmap-lookup map (destroy key))))
-                      (unroll-addhint-final-vyper '(public (key value)
-                                                     (modify map (hashmap-add map (destroy key) (destroy value)))))
-                      (unroll-addhint-final-vyper '(public (key value)
-                                                     (modify map (hashmap-modify map (destroy key) (destroy value)))))
-                      (unroll-addhint-final-vyper '(public (key)
-                                                     (modify map (hashmap-delete map (destroy key)))
-                                                     ))
-                      )))
+                     (with-hashmap '(
+                      ;'(public (key value hint) (drop key) (drop value) (drop hint))
+                      (public (key value) (verify (= (destroy value) (hashmap-lookup map (destroy key)))))
+                      (public (key value)
+                                                     (modify map (hashmap-add map (destroy key) (destroy value))))
+                      (public (key value)
+                                                     (modify map (hashmap-modify map (destroy key) (destroy value))))
+                      (public (key)
+                                                     (modify map (hashmap-delete map (destroy key))))
+                                                     ))))
+                     ; todo tester
 
 
 
 (contract->opcodes (vyper-create-final
-                     '(name=>value ; map of bitcoin.bsv to whatever the user choose
-                       name=>owner); map of bitcoin.bsv to an address that owns the name. Either the registar or the user
+                     '(name=>value ; map of name.bsv to whatever the user choose
+                       name=>owner); map of name.bsv to an address that owns the name. Either the registar or the user
                      (list
                       ; register
                       (unroll-addhint-final-vyper '(public (name owner value)
