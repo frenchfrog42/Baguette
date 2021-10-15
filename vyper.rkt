@@ -94,7 +94,7 @@
                                           ; todo: ajouter a fonction les arguments liste-données et liste-state
                                           ;todo first ou last
                                           ; c'est last, sinon ça inverse l'ordre des arguments de la fonction publique
-                                          (flatten (cdr (last (all-args-permutations (append
+                                          (flatten (cdr (last (compile-function-all (append
                                                                                        fonction
                                                                                        ; push output at the top
                                                                                        (list '(modify output output))

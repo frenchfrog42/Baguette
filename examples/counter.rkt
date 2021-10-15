@@ -19,7 +19,7 @@
                           (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
                     ))
 
-(contract->opcodes compteur) ; Fonctionne. 187bytes
+(contract->opcodes compteur) ; Fonctionne. 174bytes
 
 
 
@@ -30,7 +30,7 @@
 
 (contract->opcodes
  (garbage-collector
-  (remove-destroy-variable compteur) #f)) ; Fonctionne. 202bytes
+  (remove-destroy-variable compteur) #f)) ; Fonctionne. 189bytes
 
 
 
@@ -42,7 +42,7 @@
 (define compteur-state (vyper-create-final '(compteur)
                                             '((public () (modify compteur (+ 1 compteur))))))
 
-(contract->opcodes compteur-state) ; Fonctionne. 327 bytes
+(contract->opcodes compteur-state) ; Fonctionne. 313 bytes
 
 
 
@@ -61,4 +61,4 @@
                               ))
 
 ; In the script code you need to replace s1 with 3d (which is 59). Todo write a code that does this
-(contract->opcodes compteur-opt #f) ; Fonctionne. 57bytes
+(contract->opcodes compteur-opt #f) ; Fonctionne. 50bytes

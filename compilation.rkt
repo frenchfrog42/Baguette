@@ -174,8 +174,8 @@
 ; (recursive-product '((0 1) (2 3)))
 ; (recursive-product '((0 1) (2 3) (4 5)))
 
-(define (all-args-permutations e)
-  (begin ;(displayln e)
+(define (compile-function-all e)
+  (begin
   (match e
     ((list 'public args expr ...)
      (foldl append '()
@@ -193,7 +193,7 @@
      ))))))))
 
 
-(define (compile-contract-all l)
+(define (compile-contract-all l (keep-args-order #t))
   ; l is a list of public function
   ; We want to select on index
   ; The code produced is
@@ -204,8 +204,14 @@
              (append
               (car (compile-expr-all (list '= "pick0" i)))
               (list "OP_IF" "drop0")
-              (begin (printf "~n~nlisteargs? ~a~n~n" (car (last (all-args-permutations expr)))) '())
-              (flatten (cdr (last (all-args-permutations expr))))
+              (let ()
+                (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all expr)))) ; ir->opcodes and naive opt
+                (define opt-res (argmin opcodes->size allcomp))
+                (define res (if keep-args-order (argmin opcodes->size (filter (lambda (c) (equal? (first (string-split c " || ")) (first (string-split (last allcomp) " || ")))) allcomp)) opt-res))
+                (define code-function (second (string-split res " || ")))
+                (printf "Order of arguments for function n°~a: ~a~n" i (first (string-split res " || ")))
+                (string-split code-function))
+              ;(flatten (cdr (last (compile-function-all expr))))
               (list "OP_ELSE"))))
    (list "OP_0")
    (for/list ((i (in-range (length l)))) "OP_ENDIF")))))
@@ -243,8 +249,8 @@
      ((list 'copy var) #:when (and (symbol? var) (member var stack))
                        (list (compile-var var)))
      ; contract
-     ((list 'contract liste ...) (begin (printf "'contract avec ~a~n" liste) (compile-contract-all liste)))
-     ((list 'public args expr ...) (all-args-permutations e))
+     ((list 'contract liste ...) (compile-contract-all liste))
+     ((list 'public args expr ...) (compile-function-all e))
      ; verify expression
      ((list 'verify l)
       (define all-expr (compile-expr-all l))
@@ -437,23 +443,39 @@
 
 (define (contract->opcodes c (keep-args-order #t))
   (set-approx #f) (set-stack '()) ; make sure approx is off and stack is empty
-  (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all c)))) ; ir->opcodes and naive opt
-  ; match on if we compile a contract or not
-  (define is-contract (equal? 'public (first c)))
+  (define is-contract (equal? 'contract (first c)))
   (if is-contract
       (let ()
-        (printf (~a "You are compiling a public function, with" (if keep-args-order "out changing the order of your args" " any order of arguments") "\n"))
-        (define opt-res (argmin opcodes->size allcomp))
-        (define res (if keep-args-order (argmin opcodes->size (filter (lambda (c) (equal? (string-split c " || ") (string-split (last allcomp) " || "))) allcomp)) opt-res))
-        (define code-function (second (string-split res " || ")))
-        (printf (~a "Size of your function: " (length (string-split code-function)) (if keep-args-order (~a ", by allowing the changing order, the size would be " (length (string-split (second (string-split opt-res " || "))))) "") "\n"))
-        (printf (~a "Order of arguments: " (car (string-split res " || ")) "\n"))
-        (if (not keep-args-order) (printf (~a "Original order: " (car (string-split (last allcomp) " || ")) "\n")) '())
-        (printf (~a "Code of the contract: " code-function "\n\n")))
-      '()))
+        (printf (~a "You are compiling a contract" (if keep-args-order "" " with a different order of args of public function") "\n"))
+        (define res (first (compile-contract-all (cdr c) keep-args-order)))
+        (define code-contract (naive-opt (ir->opcodes res)))
+        (printf (~a "Size of the code: " (length (string-split code-contract)) "\n"))
+        (printf "Code of the contract:\n")
+        code-contract)
+      ; else
+      (let ()
+        (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all c)))) ; ir->opcodes and naive opt
+        ; if it's a public function
+        (define is-public-function (equal? 'public (first c)))
+        (if is-public-function
+            (let ()
+              (printf (~a "You are compiling a public function, with" (if keep-args-order "out changing the order of your args" " any order of arguments") "\n"))
+              (define opt-res (argmin opcodes->size allcomp))
+              (displayln (filter (lambda (c) (equal? (string-split c " || ") (string-split (last allcomp) " || "))) allcomp))
+              (define res (if keep-args-order (argmin opcodes->size (filter (lambda (c) (equal? (first (string-split c " || ")) (first (string-split (last allcomp) " || ")))) allcomp)) opt-res))
+              (define code-function (second (string-split res " || ")))
+              (printf (~a "Order of arguments: " (car (string-split res " || ")) "\n"))
+              (if (not keep-args-order) (printf (~a "Original order: " (car (string-split (last allcomp) " || ")) "\n")) '())
+              (printf (~a "Size of your function: " (length (string-split code-function)) (if keep-args-order (~a ", by allowing the changing order, the size would be " (length (string-split (second (string-split opt-res " || "))))) "") "\n"))
+              (printf "Code of the function\n")
+              code-function)
+            ; else: it's something else
+            (argmin opcodes->size allcomp)))))
 
 ;(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))))
-;(contract->opcodes '(public (b a) (+ (destroy a) (destroy b))) #f)
+;(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))) #f)
+;(contract->opcodes '(contract (public (a b c) (+ (destroy a) (destroy b)))))
+;(contract->opcodes '(contract (public (a b c) (+ (destroy a) (destroy b)))) #f)
   
 (define (subcontract->size c)
   (set-approx #t)
