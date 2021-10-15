@@ -5,3 +5,5 @@ Doc: https://replit-docs.frenchfrog42.repl.co https://replit.com/@frenchfrog42/r
 Todo changer les liens docs tout ça
 
 Le pull depuis replit marche bien
+
+Refaire les macros comme conseillé
