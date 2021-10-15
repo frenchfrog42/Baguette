@@ -471,8 +471,8 @@
             ; else: it's something else
             (argmin opcodes->size allcomp)))))
 
-(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))))
-(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))) #f)
+;(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))))
+;(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))) #f)
 ;(contract->opcodes '(contract (public (a b c) (+ (destroy a) (destroy b)))))
 ;(contract->opcodes '(contract (public (a b c) (+ (destroy a) (destroy b)))) #f)
   
