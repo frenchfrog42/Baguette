@@ -137,8 +137,8 @@
 
 
 
-(vyper-create-final '(a b)
-                    '((public (d) (modify a (destroy d)))
-                      (public (d) (modify b (destroy d)))
-                      ))
+;(vyper-create-final '(a b)
+;                    '((public (d) (modify a (destroy d)))
+;                      (public (d) (modify b (destroy d)))
+;                      ))
 
