@@ -232,8 +232,12 @@
      ; binary expression
      ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
      ((cons op reste) #:when (binary-op? op) (compile-binary-op-all-no-commute (compile-op op) reste))
-     ; when in approximation mode
-     (var #:when approx '(("pick10")))
+     ; when in approximation mode ;todo
+     (var #:when (and approx (symbol? var)) '(("pick10")))
+     ((list 'destroy var) #:when (and approx (symbol? var)) '(("pick10")))
+     ((list 'drop var) #:when (and approx (symbol? var)) '(("pick10")))
+     ((list 'modify var) #:when (and approx (symbol? var)) '(("pick10")))
+     ((list 'copy var) #:when (and approx (symbol? var)) '(("pick10")))
      ; var
      (var #:when (and (symbol? var) (member var stack))
           (list (compile-var var)))
@@ -475,12 +479,29 @@
 ;(contract->opcodes '(public (a b) (+ (destroy a) (destroy b))) #f)
 ;(contract->opcodes '(contract (public (a b c) (+ (destroy a) (destroy b)))))
 ;(contract->opcodes '(contract (public (a b c) (+ (destroy a) (destroy b)))) #f)
-  
+
+; Todo: fonction recursive qu'on appel avec un "niveau". profile-function était le 1er niveau ?
 (define (subcontract->size c)
   (set-approx #t)
-  (define allcomp (map ir->opcodes (compile-expr-all c)))
+  (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all c))))
   (set-approx #f)
   (opcodes->size (argmin opcodes->size allcomp)))
+
+; Profile each line of the contract
+(define (profile-function contract)
+  (if (equal? (first contract) 'public) '() (error "please give a public function")) ; fail if a contract is not given
+  ; set the stack with the argument of the public function
+  (set! stack (second contract))
+  (define code-contract (cddr contract))
+  (define list-each-expr (for/list ((expr code-contract)) (map naive-opt (map ir->opcodes (compile-expr-all expr)))))
+  (set! stack '()) ;reset the stack
+  (define list-best (map (lambda (a) (argmin opcodes->size a)) list-each-expr))
+  (printf "Result of the profiling (the orders of arguments may have been changed):~n")
+  (for/list ((expr list-best) (code code-contract))
+    (let ((size (opcodes->size expr)))
+      (printf "~a~a opcodes ==> ~a~n" size (if (< size 100) (if (< size 10) "  " " ") "") code)))
+  (printf "Sum of theses costs: ~a~n" (foldl + 0 (map opcodes->size list-best)))
+  )
 
 ; automatically drop variable
 (define (remove-destroy-variable code)
