@@ -488,8 +488,8 @@
   (opcodes->size (argmin opcodes->size allcomp)))
 
 ; Profile each line of the contract
-(define (profile-function contract)
-  (if (equal? (first contract) 'public) '() (error "please give a public function")) ; fail if a contract is not given
+(define (profile-function-simple contract)
+  (if (equal? (first contract) 'public) '() (error "please give a public function")) ; fail if a public is not given
   ; set the stack with the argument of the public function
   (set! stack (second contract))
   (define code-contract (cddr contract))
@@ -501,6 +501,50 @@
     (let ((size (opcodes->size expr)))
       (printf "~a~a opcodes ==> ~a~n" size (if (< size 100) (if (< size 10) "  " " ") "") code)))
   (printf "Sum of theses costs: ~a~n" (foldl + 0 (map opcodes->size list-best)))
+  )
+
+(define (profile-function contract)
+  (if (equal? (first contract) 'public) '() (error "please give a public function")) ; fail if a public function is not given
+  (set! stack (second contract))
+  (define code-contract (cddr contract))
+  (recursive-profile-aux code-contract))
+
+(define (recursive-profile-aux code (indent "") (father #f) (last-last-indent 0))
+  ;(displayln code)
+  ; code is a s-expr
+  (define code-iter (if (and (list? code) (equal? 'call (first code))) (third code) code))
+  (define list-of-sexpr (for/list ((e code-iter)
+                                   #:when (and (not (symbol? e)) (not (number? e)) (not (string? e))))
+                                   e))
+  ; if it was a function call, the list of s-expr is the list of argument
+  (define list-each-expr (save-stack (for/list ((expr list-of-sexpr)) (map naive-opt (map ir->opcodes (compile-expr-all expr))))))
+  (define list-best (map (lambda (a) (argmin opcodes->size a)) list-each-expr))
+  ;(displayln list-best)
+  ;(printf "Result of the profiling (the orders of arguments may have been changed):~n")
+  (for/list ((expr list-best) (c list-of-sexpr))
+    (let* ((size (opcodes->size expr))
+          (reverse-indent (make-string (- 15 (string-length indent)) #\=))
+          ; find pos of c in father
+          (child (~a c))
+          (last-indent (+ last-last-indent (if father (or (for/last ((i (in-range (- (string-length father) (string-length child))))
+                                                 #:when (string=? (substring father i (+ i (string-length child))) child))
+                                        i)
+                                      0)
+                           0))))
+      (printf "~a~a~a opcodes ~a=> ~a~a~n"
+              indent
+              size
+              (if (< size 100) (if (< size 10) "  " " ") "")
+              reverse-indent
+              (make-string last-indent #\space)
+              c)
+      (recursive-profile-aux c (~a indent "  ") (~a c) last-indent)))
+  ; apply stack modification
+  (if (and (list? code) (member (first code) '(define destroy drop modify)))
+      (compile-expr-all (cons (first code) ;define/destroy/drop/modify
+                              (cons (second code) ;the var
+                                    (if (member (first code) '(drop destroy)) '() (list 0))))) ;a random argument for define/modify
+      '())
   )
 
 ; automatically drop variable

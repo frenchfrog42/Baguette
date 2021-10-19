@@ -20,7 +20,8 @@
                     ))
 
 (contract->opcodes compteur) ; Fonctionne. 174bytes
-(profile-function compteur) ;174bytes
+(profile-function-simple compteur) ;174bytes
+(profile-function compteur)
 
 
 
@@ -33,7 +34,8 @@
   (garbage-collector (remove-destroy-variable compteur) #f))
 
 (contract->opcodes compteur-nomemory) ; Fonctionne. 189bytes
-(profile-function compteur-nomemory) ;188, because args changed, (contract->opcodes compteur-nomemory #f) = 188
+(profile-function-simple compteur-nomemory) ;188 because args changed
+(profile-function compteur-nomemory)
 
 
 
@@ -65,4 +67,5 @@
 
 ; In the script code you need to replace s1 with 3d (which is 59). Todo write a code that does this
 (contract->opcodes compteur-opt #f) ; Fonctionne. 50bytes
+(profile-function-simple compteur-opt)
 (profile-function compteur-opt)
