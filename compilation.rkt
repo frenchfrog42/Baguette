@@ -512,7 +512,7 @@
   (recursive-profile-aux code-contract))
 
 (define (recursive-profile-aux code (indent "") (father #f) (last-last-indent 0))
-  (displayln code)
+  ;(displayln code)
   ; code is a s-expr
   (define code-iter (if (and (list? code) (equal? 'call (first code))) (third code) code))
   (define list-of-sexpr (for/list ((e code-iter)
@@ -521,7 +521,7 @@
                                            (not (symbol? e))
                                            (not (number? e))
                                            (not (string? e))
-                                           (and (list? e) (equal? 'ignore (first e)))))
+                                           (not (and (list? e) (equal? 'ignore (first e))))))
                                    e))
   ; if it was a function call, the list of s-expr is the list of argument
   (define list-each-expr (save-stack (for/list ((expr list-of-sexpr)) (map naive-opt (map ir->opcodes (compile-expr-all expr))))))
