@@ -1,0 +1,50 @@
+{
+    "version": 5,
+    "contract": "TestForloop",
+    "structs": [],
+    "alias": [],
+    "abi": [
+        {
+            "type": "function",
+            "name": "foreach",
+            "index": 0,
+            "params": [
+                {
+                    "name": "hashtable",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "type": "function",
+            "name": "changemap",
+            "index": 1,
+            "params": [
+                {
+                    "name": "newtable",
+                    "type": "bytes"
+                },
+                {
+                    "name": "oldtable",
+                    "type": "bytes"
+                },
+                {
+                    "name": "txPreimage",
+                    "type": "SigHashPreimage"
+                },
+                {
+                    "name": "amount",
+                    "type": "int"
+                },
+                {
+                    "name": "newcode",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "type": "constructor",
+            "params": []
+        }
+    ],
+    "asm": "
