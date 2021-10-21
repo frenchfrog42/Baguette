@@ -229,6 +229,7 @@
                                    (call-call nom args)))) ; todo remplacer et mettre juste "(call-call nom args)" et voir si ça casse rien
      ; define
      ((list 'define var expr) (let ((res (compile-expr-all expr))) (new-var var) res)) ; todo
+     ;((list 'push-var var) (new-var var) res)) ; todo make a expression to push a var to the stack when we write assembly
      ; binary expression
      ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
      ((cons op reste) #:when (binary-op? op) (compile-binary-op-all-no-commute (compile-op op) reste))
@@ -493,7 +494,8 @@
   ; set the stack with the argument of the public function
   (set! stack (second contract))
   (define code-contract (cddr contract))
-  (define list-each-expr (for/list ((expr code-contract)) (map naive-opt (map ir->opcodes (compile-expr-all expr)))))
+  (define list-each-expr (for/list ((expr code-contract))
+                           (map naive-opt (map ir->opcodes (compile-expr-all expr)))))
   (set! stack '()) ;reset the stack
   (define list-best (map (lambda (a) (argmin opcodes->size a)) list-each-expr))
   (printf "Result of the profiling (the orders of arguments may have been changed):~n")
@@ -506,15 +508,20 @@
 (define (profile-function contract)
   (if (equal? (first contract) 'public) '() (error "please give a public function")) ; fail if a public function is not given
   (set! stack (second contract))
-  (define code-contract (cddr contract))
+  (define code-contract (filter (lambda (a) (not (and (list? a) (equal? 'ignore (first a))))) (cddr contract)))
   (recursive-profile-aux code-contract))
 
 (define (recursive-profile-aux code (indent "") (father #f) (last-last-indent 0))
-  ;(displayln code)
+  (displayln code)
   ; code is a s-expr
   (define code-iter (if (and (list? code) (equal? 'call (first code))) (third code) code))
   (define list-of-sexpr (for/list ((e code-iter)
-                                   #:when (and (not (symbol? e)) (not (number? e)) (not (string? e))))
+                                   #:when (and
+                                           ; exclude atomic expression and ignore statements
+                                           (not (symbol? e))
+                                           (not (number? e))
+                                           (not (string? e))
+                                           (and (list? e) (equal? 'ignore (first e)))))
                                    e))
   ; if it was a function call, the list of s-expr is the list of argument
   (define list-each-expr (save-stack (for/list ((expr list-of-sexpr)) (map naive-opt (map ir->opcodes (compile-expr-all expr))))))

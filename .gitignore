@@ -2,3 +2,4 @@
 *.zo
 *.dep
 compiled/*
+*.json

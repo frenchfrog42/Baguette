@@ -54,6 +54,16 @@
                                                        (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx))))
                                                       ))
                              ))
+(profile-function (unroll-addhint-final '(public
+                                                       (tx amount map key value)
+                                                       (define scriptCode (call getScriptCode (tx)))
+                                                       (drop value)
+                                                       (define newmap (hashmap-delete (destroy map) (destroy key))); 0))
+                                                       (define newAmount (call num2bin ((destroy amount) 8)))
+                                                       (define newScriptCode (+bytes (bytes-delete-last (destroy scriptCode) 32) (call sha256 ((destroy newmap)))))
+                                                       (define output (call buildOutput ((destroy newScriptCode) (destroy newAmount))))
+                                                       (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx))))
+                                                      )))
 
 (define (with-hashmap l)
   (map (lambda (a) (unroll-addhint-final-vyper a)) l))

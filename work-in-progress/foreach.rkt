@@ -1,11 +1,17 @@
 #lang racket
 
-; work in progress for foreach on hashmaps
 
-(define (opcode-to-hex a)
+(require "../compilation.rkt")
+(require "../hashtable.rkt")
+(require "../util.rkt")
+
+; todo mettre ça dans util
+(define (opcode->hex a)
   (match a
     ("OP_1" "51")
     ("OP_2" "52")
+    ("20" "0120")
+    ("40" "0140")
     ("OP_SPLIT" "7f")
     ("OP_SWAP" "7c")
     ("OP_BIN2NUM" "81")
@@ -14,106 +20,77 @@
     ("OP_VERIFY" "69")
     ("OP_1ADD" "8b")))
 
-(define (build-foreach l)
-  (define comp (compiled-to-opcode (car (compile-expr-all (cons* l)))))
-  (define list-of-opcode (string-split comp " "))
-  (define taille (length list-of-opcode))
-  (define list-hex-code (map opcode-to-hex list-of-opcode))
-  ; returns
-  (define hex-code (string-join list-hex-code ""))
-  (define indice-debut 10)
-  (define indice-fin (+ indice-debut taille))
-  (define code-opcode (substring comp 1))
-  (values indice-debut indice-fin hex-code code-opcode))
-
-(build-foreach
- (list
-  ; stack:: tab i
-  1 "OP_SPLIT OP_SWAP OP_BIN2NUM"
-  ; stack:: elem tab' i
-  2 "OP_PICK"
-  ; stack:: i elem tab' i
-  "OP_EQUAL OP_VERIFY"
-  ; stack:: tab' i
-  "OP_SWAP OP_1ADD OP_SWAP"
-  ; stack:: tab' i'
-  ))
-
-(let ((indice-debut-foreach 99)
-      (indice-fin-foreach 99)
-      (code-inside-foreach "aaaa")
-      (code-opcodes "OP_RETURN")
-      (taille-actuelle-tableau 2))
-  (define foreach `(public (tx-arg amount-arg tab codeforeach elem quelle-fonction)
-                           ; get state
-                           (define scriptCode (call getScriptCode (tx-arg)))
-                           (define hash-tab (bytes-get-last scriptCode 32))
-                           (verify (= (call hash256 (tab)) hash-tab))
-
-                         
-                           ; first public function
-                           (modify quelle-fonction quelle-fonction)
-                           (modify tab tab)
-                           ; stack:: tab quelle-fonction
-                           "OP_OVER" ; quelle-fonction will be dropped after if/then/else
-                           "OP_IF"
-                         
-                           ; change state
-                           ;(modify tab (+bytes tab elem))
-                           (+bytes tab elem)
-                           "OP_SWAP OP_DROP"
+(define (create-code-once function)
+  (define code "")
+  (new-var 'key)
+  (new-var 'value)
+  (set! code (first (compile-expr-all (function 'key 'value))))
+  (delete-var 'key)
+  (delete-var 'value)
+  (displayln code)
+  (contract->opcodes
+   (list "40" "OP_SPLIT" "OP_SWAP" ;extract key+value
+         "20" "OP_SPLIT" "OP_SWAP" ;extract key and value
+          code))) ; verify key == value for each element of the map
 
 
-                           ; second public function
-                           "OP_ELSE"
-                         
-                           ; foreach (e: tab) { require(e == i); i++; }
-                           "OP_0" ;(define i 0)
-                           "OP_SWAP"
-                           ; stack:: tab i
-                           (ignore ,(let-values (((a b c d) (build-foreach
-                                                             (list
-                                                              ; stack:: tab i
-                                                              1 "OP_SPLIT OP_SWAP OP_BIN2NUM"
-                                                              ; stack:: elem tab' i
-                                                              2 "OP_PICK"
-                                                              ; stack:: i elem tab' i
-                                                              "OP_EQUAL OP_VERIFY"
-                                                              ; stack:: tab' i
-                                                              "OP_SWAP OP_1ADD OP_SWAP"
-                                                              ; stack:: tab' i+1
-                                                              ))))
-                                      (set! indice-debut-foreach a)
-                                      (set! indice-fin-foreach b)
-                                      (set! code-inside-foreach c)
-                                      (set! code-opcodes d)
-                                      ))
-                           ; génération du code de la boucle
-                           "OP_NOP"
-                           ,(string-join (build-list taille-actuelle-tableau (lambda (a) code-opcodes)))
-                           "OP_NOP"
-                           ; stack:: tab i
-                           "OP_SWAP OP_DROP" ;(drop i)
-                           ; fin du code de la boucle
-                           "OP_ENDIF"
-                           (drop elem)
-                           (drop quelle-fonction)
-                         
-                           ; computing the output
-                           (define newAmount (call num2bin ((destroy amount-arg) 8)))
-                           (define newScriptCode
-                             ,(+bytes* `((bytes-get-first scriptCode ,indice-debut-foreach)
-                                         codeforeach
-                                         (bytes-delete-last (bytes-delete-first scriptCode ,indice-fin-foreach) 32)
-                                         (destroy hash-tab))))
-                           ; on vérifie qu'on a le bon code de boucle
-                           ;(verify (call repetition codeforeach ,code-inside-foreach))
-                           (drop tab)
-                           (drop codeforeach)
-                           ; fin des drops à la place du verify qui va destroy (?)
-                           (drop scriptCode)
-                           (define output (call buildOutput ((destroy newScriptCode) (destroy newAmount))))
-                           (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
-                           ))
-  '()) ;(best-version foreach))
+(define (test-fonction a b) `(verify (= (destroy ,a) (destroy ,b))))
 
+(define code-once (create-code-once test-fonction))
+(define hexa (string-join (map opcode->hex (string-split code-once)) ""))
+(define taille-liste (/ (string-length hexa) 2))
+
+(define (verif-hashtable n) `(contract
+                              ; foreach code
+                              (public (hashtable); code-foreach)
+                                ; place hashtable at the top of the stack
+                                (modify hashtable hashtable)
+                                ; code foreach
+                                "codeici"
+                                ,(let ((code-n-time (make-list n code-once))) ; must burn key and value
+                                   code-n-time)
+                                ; assert map is empty
+                                "OP_0" "OP_EQUALVERIFY"
+                                ; end of the function. Check next output ?
+                                1)
+                              ; changing the hashmap
+                              (public (newHashtable oldHashtable tx-arg amount-arg new-codeforeach)
+                                ;(define size (/ (call getLen ((destroy newHashtable))) 64))
+                                (drop newHashtable)
+                                ; verify new-codeforeach is size * code-once
+                                (define scriptCode (call getScriptCode (tx-arg)))
+                                ; todo voir ça
+                                ; ordre des args la dans le template = pas comme les arguments maintenant
+                                ;"OP_FALSE" "OP_VERIFY"
+                                ;(verify (= (call getLen (new-codeforeach)) ,(* taille_liste (+ n 1))))
+                                ; (verify (= new-codeforeach (bytes-delete-first (bytes-get-first scriptCode (+ ,(* n taille-liste) 8)) 8))); ok
+                                (define size-old (/ (call getLen ((destroy oldHashtable))) 64))
+                                (define scriptCode_ ,(+bytes* `(
+                                                                (bytes-get-first scriptCode "r1")
+                                                                (destroy new-codeforeach)
+                                                                (bytes-delete-first scriptCode (+ (* (destroy size-old) ,taille-liste) "r1")))))
+                                (drop scriptCode)
+                                (define newAmount (call num2bin ((destroy amount-arg) 8)))
+                                (define output (call buildOutput ((destroy scriptCode_) (destroy newAmount))))
+                                (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg)))))))
+
+(define (replace-r1 str)
+  (define liste (string-split str))
+  (define valeur (~a "OP_" (index-of liste "codeici"))) ;marche que si l'index est petit, sinon todo
+  (displayln valeur)
+  (define a-replace (indexes-of liste "r1"))
+  (string-join (remove "codeici" (list-set (list-set liste (first a-replace) valeur) (second a-replace) valeur))))
+  
+; 'public (a b) -> a au fond
+
+(verif-hashtable 2)
+(contract->opcodes (verif-hashtable 2))
+(replace-r1 (contract->opcodes (verif-hashtable 2)))
+
+(for/list ((n '(0 1 2 3 4 5)))
+  (display-to-file #:exists 'replace
+   (~a
+    (file->string "template.json")
+    (replace-r1 (contract->opcodes (verif-hashtable n)))
+    "\"}")
+   (~a "test_foreach_" n ".json")))
