@@ -18,4 +18,5 @@
 (printf "Please also try (contract->opcodes '(public (secret) (= (destroy secret) 12)))~n")
 (printf "(To copy paste press Ctrl+Shift+C and Ctrl+Shift+V)~n~n")
 
-(printf "For more information, please read our documentation: https://replit-docs.frenchfrog42.repl.co~n~n")
+(printf "For more information, please read our documentation: https://replit-docs.frenchfrog42.repl.co~n")
+(printf "If you have any question, ask it on discord: https://discord.com/invite/GvjAdXTMXz~n~n")
