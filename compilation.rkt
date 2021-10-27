@@ -356,7 +356,7 @@
 (define (call-call function args)
   (match function
     ('getLen (map (lambda (a) (append a (list '("OP_SIZE OP_NIP")))) (compile-expr-all (car args))))
-    ('not (map (lambda (a) (append a (list "OP_NOT"))) (compile-expr-all args)))
+    ('not (map (lambda (a) (append a (list "OP_NOT"))) (compile-expr-all (car args))))
     ('getScriptCode (getScriptCode args))
     ('getScriptCode-with-header (getScriptCode-with-header args))
     ('buildOutput (buildOutput args))
