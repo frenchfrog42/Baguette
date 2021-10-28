@@ -3,11 +3,9 @@
 (require "../compilation.rkt")
 (require "../util.rkt")
 
-(bytes->hex-string
- (sha256-bytes
-  (hex-string->bytes "0a")))
+;(bytes->hex-string (sha256-bytes (hex-string->bytes ""))) ; OP_0 OP_SHA256
 
-(define depth 2)
+(define depth 1)
 
 (define contract
   ; fails if name already taken
@@ -51,4 +49,23 @@
      ;todo
      ))
 
-(contract->opcodes contract)
+(define first-root
+  (let ((tmp (sha256-bytes (hex-string->bytes "")))) ;we start from OP_0
+    (for/list ((i (in-range depth)))
+      (set! tmp (sha256-bytes (list->bytes (flatten (for/list ((_ (in-range depth))) (bytes->list tmp)))))))
+    (bytes->hex-string tmp)))
+
+(define un (sha256-bytes (hex-string->bytes "")))
+(define lun (bytes->list un))
+(bytes->hex-string un)
+
+(define deux (sha256-bytes (list->bytes (flatten (for/list ((d (in-range depth))) lun)))))
+(define ldeux (bytes->list deux))
+(bytes->hex-string deux)
+
+(define trois (sha256-bytes (list->bytes (flatten (for/list ((d (in-range depth))) ldeux)))))
+(bytes->hex-string trois)
+
+first-root
+
+;(contract->opcodes contract)
