@@ -14,31 +14,41 @@
   ; update the root of the tree
   `(public
      ; arguments ==> string value hint0-left hint0-right hint1-left ... to hint,(depth - 1)-right
-     ,(append '(string value old-root)
+     ,(append '(string value-of-string old-root)
               (flatten (for/list ((i (in-range depth)))
                          (list
                           (string->symbol (~a "hint" i "-left"))
                           (string->symbol (~a "hint" i "-right"))))))
      ; code of the function
-     (define current-hash (call sha256 (value))) ;for debug
-     (define new-root (call sha256 (1))) ;the new root starts from 1
+     (define old-root (call sha256 (value-of-string))) ; computation of the old-root
+     (define new-root (call sha256 (1))) ; the new root starts from 1 (or something else (todo))
      ,(cons*
        (for/list ((i (in-range depth)))
          (cons* `(
                   ; first verify hints
-                  (define current-byte (bytes-get-first (bytes-delete-first value ,i) 1))
+                  (define current-byte (bytes-get-first (bytes-delete-first value-of-string ,i) 1))
                   ; hint0-left should be of size size(curren-byte)
                   (verify (= (call getLen ((destroy current-byte))) (call getLen (hint0-left)))); -1 maybe
                   ; modify current-hash
                   ,(let ((left (string->symbol (~a "hint" i "-left")))
                          (right (string->symbol (~a "hint" i "-right"))))
                      `(cons
-                       (modify current-hash (call sha256 (,(+bytes* `(,left current-hash ,right))))) ;for debug
-                       (modify new-root (call sha256 (,(+bytes* `(,left new-root ,right)))))))))))
-     ; now, the name was free iif value was 0 (otherwise the value is 1)
-     ; so iif the new-root is different from the old one
-     (verify (call not ((= new-root old-root))))
-     ; update new root
+                       (modify old-root (call sha256 (,(+bytes* `(,left old-root ,right)))))
+                       (modify new-root (call sha256 (,(+bytes* `(,left new-root ,right))))))))))) ;todo drop left/right
+     ; verification of hints
+     (define real-old-root 0) ;debug
+     (verify (= real-old-root old-root)) ;real-old-root is root parsed from state
+     ; right now, everything is verified, we can do the computation
+
+     ; for a set, we check value was something different from 0, the new value is 1
+     ; to do an hashmap with this, we'd do (verify value-of-string) to check if the element is here
+     ; we would return value-of-string and check (= new-root old-root) if we want to do a lookup
+     ; we would just update the root, without any check on value-of-string for the javascript "set"
+     ; and set (at the start of new-root) to either hash(0), or hash(something else) for a deletion/modification
+     (verify value-of-string)
+     
+     ; update new root to the state
+     ;todo
      ))
 
 (contract->opcodes contract)
