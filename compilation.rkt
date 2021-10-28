@@ -51,7 +51,9 @@
      (= "OP_EQUAL")
      (< "OP_LESSTHAN")
      (& "OP_AND")
-     (&& "OP_AND")
+     (&& "OP_AND") ;todo
+     (<< "OP_LSHIFT")
+     (>> "OP_RSHIFT")
   ; )(rotate
      (bytes-get-first "OP_SPLIT drop0")
      (bytes-get-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop1") ; todo
@@ -174,6 +176,26 @@
 ; (recursive-product '((0 1) (2 3)))
 ; (recursive-product '((0 1) (2 3) (4 5)))
 
+; compile without testing all permutation
+(define (compile-function-simple e)
+  (begin
+  (match e
+    ((list 'public args expr ...)
+     (foldl append '()
+      (for/list ((perm-arg (list args)))
+        (save-stack (let ()
+         (for-each new-var perm-arg)
+         (define all-expr-perm (for/list ((e expr)) (compile-expr-all e)))
+         (define iter-all-expr (recursive-product all-expr-perm))
+         ;(printf "All combos ~a~n" iter-all-expr)
+         (define all-contract-perms (for/list ((version iter-all-expr))
+                                              (let ((res (list* (format "~a" (stack->string perm-arg)) version))) ;(compile-list-public-function version))))
+                                                ;(printf "Res: ~a~n" res)
+                                                res)))
+         all-contract-perms
+     ))))))))
+
+; same, but with all permutation
 (define (compile-function-all e)
   (begin
   (match e
@@ -191,6 +213,9 @@
                                                 res)))
          all-contract-perms
      ))))))))
+
+; by default, use the all permutation
+(define compile-function compile-function-all)
 
 
 (define (compile-contract-all l (keep-args-order #t))
@@ -255,7 +280,7 @@
                        (list (compile-var var)))
      ; contract
      ((list 'contract liste ...) (compile-contract-all liste))
-     ((list 'public args expr ...) (compile-function-all e))
+     ((list 'public args expr ...) (compile-function e))
      ; verify expression
      ((list 'verify l)
       (define all-expr (compile-expr-all l))
@@ -371,7 +396,7 @@
     ('writeVarint-compile-small (writeVarint-compile-small (car args)))
     ('fromLEUnsigned (fromLEUnsigned args))
     ('toLEUnsigned (toLEUnsigned (first args) (second args)))
-    ('bin2num (map (lambda (a) (append a (list '("OP_BIN2NUM")))) (compile-expr-all args)))
+    ('bin2num (map (lambda (a) (append a (list '("OP_BIN2NUM")))) (compile-expr-all (car args))))
     ('num2bin (append
                (car (compile-expr-all (first args)))
                (car (compile-expr-all (second args)))
@@ -459,9 +484,15 @@
         code-contract)
       ; else
       (let ()
-        (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all c)))) ; ir->opcodes and naive opt
         ; if it's a public function
         (define is-public-function (equal? 'public (first c)))
+        ; change function used if keep-args-order AND list of args too big
+        (if (and is-public-function (> (length (second c)) 4))
+            (begin
+              (println "Compilation without changing the number of arguments because number of args is too big")
+              (set! compile-function compile-function-simple))
+            '())
+        (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all c)))) ; ir->opcodes and naive opt
         (if is-public-function
             (let ()
               (printf (~a "You are compiling a public function, with" (if keep-args-order "out changing the order of your args" " any order of arguments") "\n"))

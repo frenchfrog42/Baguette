@@ -12,7 +12,7 @@
 
 (define compteur '(public (tx-arg amount-arg)
                           (define scriptCode (call getScriptCode (tx-arg)))
-                          (define counter (call bin2num (bytes-get-last scriptCode 1)))
+                          (define counter (call bin2num ((bytes-get-last scriptCode 1))))
                           (define scriptCode_ (+bytes (bytes-delete-last (destroy scriptCode) 1) (+ 1 (destroy counter))))
                           (define newAmount (call num2bin ((destroy amount-arg) 8)))
                           (define output (call buildOutput ((destroy scriptCode_) (destroy newAmount))))
@@ -58,7 +58,7 @@
 
 (define compteur-opt '(public (tx-arg amount-arg)
                               (define scriptCode-with-header (call getScriptCode-with-header (tx-arg)))
-                              (define counter (call bin2num (bytes-get-last scriptCode-with-header 1)))
+                              (define counter (call bin2num ((bytes-get-last scriptCode-with-header 1))))
                               (define scriptCode_ (+bytes (bytes-delete-last (destroy scriptCode-with-header) 1) (+ 1 (destroy counter))))
                               (define newAmount (call num2bin ((destroy amount-arg) 8)))
                               (define output (call buildOutput-with-header ((destroy scriptCode_) (destroy newAmount))))

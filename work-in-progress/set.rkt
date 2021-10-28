@@ -6,8 +6,7 @@
 ;(bytes->hex-string (sha256-bytes (hex-string->bytes ""))) ; OP_0 OP_SHA256
 
 (define depth 1)
-(define how-many-per-level 256) ;lol
-;todo split in 16 * 16
+(define how-many-per-level 16)
 
 (define contract
   ; fails if name already taken
@@ -17,8 +16,10 @@
      ,(append '(string value-of-string real-old-root real-new-root)
               (flatten (for/list ((i (in-range depth)))
                          (list
-                          (string->symbol (~a "hint" i "-left"))
-                          (string->symbol (~a "hint" i "-right"))))))
+                          (string->symbol (~a "hint" i "-left-first"))
+                          (string->symbol (~a "hint" i "-right-first"))
+                          (string->symbol (~a "hint" i "-left-second"))
+                          (string->symbol (~a "hint" i "-right-second"))))))
      ; code of the function
      (define old-root (call sha256 (0))) ; computation of the old-root
      (define new-root (call sha256 (value-of-string))) ; the new root starts from 1 (or something else (todo))
@@ -27,14 +28,20 @@
          (cons* `(
                   ; first verify hints
                   (define current-byte (bytes-get-first (bytes-delete-first string ,i) 1))
+                  (define first-part (call bin2num ((& current-byte "0f"))))
+                  (define second-part (call bin2num ((>> (& current-byte "f0") 4))))
                   ; hint0-left should be of size size(curren-byte)
                   (drop current-byte); (verify (= ((destroy current-byte)) (/ (call getLen (hint0-left)) 32))); -1 maybe ; mouais verif ça
                   ; modify current-hash
-                  ,(let ((left (string->symbol (~a "hint" i "-left")))
-                         (right (string->symbol (~a "hint" i "-right"))))
-                     `(cons
-                       (modify old-root (call sha256 (,(+bytes* `(,left old-root ,right)))))
-                       (modify new-root (call sha256 (,(+bytes* `((destroy ,left) new-root (destroy ,right)))))))))))) ;todo drop left/right
+                  ,(let ((left1 (string->symbol (~a "hint" i "-left-first")))
+                         (right1 (string->symbol (~a "hint" i "-right-first")))
+                         (left2 (string->symbol (~a "hint" i "-left-second")))
+                         (right2 (string->symbol (~a "hint" i "-right-second"))))
+                     (cons* `(
+                              (modify old-root (call sha256 (,(+bytes* `(,left1 old-root ,right1)))))
+                              (modify new-root (call sha256 (,(+bytes* `((destroy ,left1) new-root (destroy ,right1))))))
+                              (modify old-root (call sha256 (,(+bytes* `(,left2 old-root ,right2)))))
+                              (modify new-root (call sha256 (,(+bytes* `((destroy ,left2) new-root (destroy ,right2)))))))))))))
      ; verification of hints
      ;(define real-old-root 0) ;debug
      (verify (= real-old-root old-root)) ;ok ;real-old-root is root parsed from state
@@ -72,10 +79,10 @@
 ; first hint
 ;(bytes->hex-string (list->bytes (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) lun))))
 
-(bytes->hex-string
+(ignore (bytes->hex-string
  (sha256-bytes (list->bytes (append
                              (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (sha256-bytes (hex-string->bytes "")))))
-                             (bytes->list (sha256-bytes (hex-string->bytes "01")))))))
+                             (bytes->list (sha256-bytes (hex-string->bytes "01"))))))))
 
 first-root
 
