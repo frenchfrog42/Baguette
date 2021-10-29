@@ -182,7 +182,7 @@
   (match e
     ((list 'public args expr ...)
      (foldl append '()
-      (for/list ((perm-arg (list args)))
+      (for/list ((perm-arg (list (reverse args)))) ;todo checker si c'est un reverse ou pas
         (save-stack (let ()
          (for-each new-var perm-arg)
          (define all-expr-perm (for/list ((e expr)) (compile-expr-all e)))
