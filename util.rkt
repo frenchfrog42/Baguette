@@ -9,14 +9,14 @@
 (define +bytes* (lambda (l) (apply-all l '+bytes)))
 
 (define (hex-int n)
-  (if (< n 11) (format "~a" n)
+  (if (< n 10) (format "~a" n)
       (match n
-        (11 "a")
-        (12 "b")
-        (13 "c")
-        (14 "d")
-        (15 "e")
-        (16 "f"))))
+        (10 "a")
+        (11 "b")
+        (12 "c")
+        (13 "d")
+        (14 "e")
+        (15 "f"))))
 
 (define-syntax-rule (ignore e) '())
 

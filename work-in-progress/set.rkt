@@ -5,7 +5,7 @@
 
 ;(bytes->hex-string (sha256-bytes (hex-string->bytes ""))) ; OP_0 OP_SHA256
 
-(define depth 2)
+(define depth 8)
 (define how-many-per-level 16)
 
 ; verification of the choosen depth 
@@ -40,7 +40,7 @@
   ; update the root of the tree
   `(public
      ; arguments ==> string value hint0-left hint0-right hint1-left ... to hint,(depth - 1)-right
-     ,(append '(string what-shouldbe-oldroot what-shouldbe-newroot) ; for debug
+     ,(append '(string oldold what-shouldbe-newroot) ; for debug
               (flatten (for/list ((i (in-range depth)))
                          (list
                           (string->symbol (~a "hint" i "-left-first"))
@@ -76,7 +76,7 @@
      (verify (= new-root (destroy what-shouldbe-newroot)))
      (drop new-root)
      ; the old root is the one from the state
-     (define old-root-from-state (destroy what-shouldbe-oldroot)) ; todo: parse from state
+     (define old-root-from-state (destroy oldold)) ; todo: parse from state
      (verify (= old-root old-root-from-state)) ; todo
      (drop old-root-from-state)
      (drop old-root)
@@ -126,6 +126,8 @@
 ; replacement of 0000...000 into something else
 ; computation of the new root
 
+; test for depth = 5
+
 ; first subroot
 (define un (sha256-bytes (hex-string->bytes "01")))
 ; second
@@ -151,13 +153,27 @@
 ; new root
 (bytes->hex-string cinq)
 
+; variable depth
 
-(bytes->hex-string trois)
+; iteration of what is just before
+(define (compute-new-root n)
+  (let ((tmp (sha256-bytes (hex-string->bytes "01"))))
+    (for/list ((i (in-range n)))
+      (set! tmp (sha256-bytes (list->bytes (append
+                                          (bytes->list tmp)
+                                          (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (compute-main-root i)))))))))
+    tmp))
+
+; old root
+(bytes->hex-string (compute-main-root (* 2 depth)))
+; new root
+(bytes->hex-string (compute-new-root (* 2 depth)))
 
 ; list of hints
+(map (lambda (s) (~a "new Bytes(''), new Bytes('" s "'.repeat(15)),"))
 (flatten (for/list ((i (in-range depth))) (cons
                                            (bytes->hex-string (compute-main-root (* 2 i)))
-                                           (bytes->hex-string (compute-main-root (+ 1 (* 2 i)))))))
+                                           (bytes->hex-string (compute-main-root (+ 1 (* 2 i))))))))
 
 
 

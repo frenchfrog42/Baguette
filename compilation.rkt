@@ -11,25 +11,27 @@
   (set! approx val))
 
 (define (compile-int n)
-  (if (< n 17)
-      (list (~a "OP_" n))
-      (list (format "~a~a" (hex-int (quotient n 16)) (hex-int (remainder n 16))))))
+  (if (integer? n)
+      (if (< n 17)
+          (list (~a "OP_" n))
+          (list (format "~a~a" (hex-int (quotient n 16)) (hex-int (remainder n 16)))))
+  "wtf")) ;wtf
 
 (define (to-opcode s)
   (match s
     ;pick
     ("pick0" '("OP_DUP"))
     ("pick1" '("OP_OVER"))
-    ((regexp #rx"pick*") (list (~a "OP_" (substring s 4)) "OP_PICK"))
+    ((regexp #rx"pick*") (list (compile-int (string->number (substring s 4))) "OP_PICK"))
     ;roll
     ("roll0" '("//roll0"))
     ("roll1" '("OP_SWAP"))
     ("roll2" '("OP_ROT"))
-    ((regexp #rx"roll*") (list (~a "OP_" (substring s 4)) "OP_ROLL"))
+    ((regexp #rx"roll*") (list (compile-int (string->number (substring s 4))) "OP_ROLL"))
     ;drop
     ("drop0" '("OP_DROP"))
     ("drop1" '("OP_NIP"))
-    ((regexp #rx"drop*") (list (~a "OP_" (substring s 4)) "OP_ROLL" "OP_DROP"))
+    ((regexp #rx"drop*") (list (compile-int (string->number (substring s 4))) "OP_ROLL" "OP_DROP"))
     (s s)))
 
 ;todo
