@@ -40,7 +40,7 @@
   ; update the root of the tree
   `(public
      ; arguments ==> string value hint0-left hint0-right hint1-left ... to hint,(depth - 1)-right
-     ,(append '(string real-new-root) ; for debug
+     ,(append '(string what-shouldbe-oldroot what-shouldbe-newroot) ; for debug
               (flatten (for/list ((i (in-range depth)))
                          (list
                           (string->symbol (~a "hint" i "-left-first"))
@@ -50,6 +50,7 @@
      ; code of the function
      ; en fait faut aussi calculer l'ancienne root, quel singe bordel
      (define new-root (call sha256 (1))) ; the new root starts from 1. More efficient to call sha256 on 1, then replacing it by the value lol
+     (define old-root (call sha256 (0))) ; in the old root, the value wasn't taken
      ,(cons*
        (for/list ((i (in-range depth)))
          (let ((left1 (string->symbol (~a "hint" i "-left-first")))
@@ -57,22 +58,32 @@
                (left2 (string->symbol (~a "hint" i "-left-second")))
                (right2 (string->symbol (~a "hint" i "-right-second"))))
            (cons* `(
-                    ; après tester n'importe quoi au hasard c'est la config qui donne la taille minimale, wtf
+                    ; après tester n'importe quoi au hasard c'est la config qui donne la taille minimale, wtf (todo retester pcq on a rajouté old-root)
                     (define current-byte (bytes-get-first (bytes-delete-first string ,i) 1)) ;todo mieux
                     (define first-part (call bin2num ((& current-byte 15))))
                     ; hint-left-first should be of size size(first-part), and same for hint-left-second
                     (verify (= (destroy first-part) (/ (call getLen (,left1)) 32)))
                     (define second-part (call bin2num ((>> (& (destroy current-byte) (call invert (15))) 4))))
-                    ;(verify (= first-part 0))
-                    ;(verify (= second-part 0))
                     (verify (= (destroy second-part) (/ (call getLen (,left2)) 32)))
+                    (modify old-root (call sha256 (,(+bytes* `(,left1 old-root ,right1)))))
+                    (modify old-root (call sha256 (,(+bytes* `(,left2 old-root ,right2)))))
                     (modify new-root (call sha256 (,(+bytes* `((destroy ,left1) new-root (destroy ,right1))))))
                     (modify new-root (call sha256 (,(+bytes* `((destroy ,left2) new-root (destroy ,right2)))))))))))
-     ; verification of hints
-     ;(define real-old-root 0) ;debug
-     ;(verify (= real-old-root old-root)) ;ok ;real-old-root is root parsed from state
-     (verify (= real-new-root new-root))
-     (destroy new-root) (drop real-new-root)
+     ; verifications
+     ; the value wasn't taken
+     (verify (call not ((= old-root new-root))))
+     ; for debug only, check the value of the root is correct
+     (verify (= new-root (destroy what-shouldbe-newroot)))
+     (drop new-root)
+     ; the old root is the one from the state
+     (define old-root-from-state (destroy what-shouldbe-oldroot)) ; todo: parse from state
+     (verify (= old-root old-root-from-state)) ; todo
+     (drop old-root-from-state)
+     (drop old-root)
+
+     ; return
+     (drop string)
+     1
      
      ; right now, everything is verified, we can do the computation
 
@@ -134,9 +145,8 @@
                                           (bytes->list quatre)
                                           (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (compute-main-root 3))))))))
 
-
 ; old root
-(bytes->hex-string (compute-main-root 4))
+(bytes->hex-string (compute-main-root 4)) ;depth-1
 
 ; new root
 (bytes->hex-string cinq)
