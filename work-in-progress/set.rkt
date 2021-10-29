@@ -5,8 +5,17 @@
 
 ;(bytes->hex-string (sha256-bytes (hex-string->bytes ""))) ; OP_0 OP_SHA256
 
-(define depth 1)
+(define depth 9)
 (define how-many-per-level 16)
+
+;a-z A-Z 0-9 ==> 2*26 + 10 = 62
+;one byte => 256
+
+;3bytes => 16777216 (256**3)
+;length4 > 14776336 (62**4)
+
+; size of depth9 = 650 in size (401 without old root)
+; and it eq to length 12
 
 (define contract
   ; fails if name already taken
