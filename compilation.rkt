@@ -182,7 +182,7 @@
   (match e
     ((list 'public args expr ...)
      (foldl append '()
-      (for/list ((perm-arg (list (reverse args)))) ;todo checker si c'est un reverse ou pas
+      (for/list ((perm-arg (list args))) ;todo checker si c'est un reverse ou pas ; todo voir vraiment ça
         (save-stack (let ()
          (for-each new-var perm-arg)
          (define all-expr-perm (for/list ((e expr)) (compile-expr-all e)))
@@ -382,6 +382,7 @@
   (match function
     ('getLen (map (lambda (a) (append a (list '("OP_SIZE OP_NIP")))) (compile-expr-all (car args))))
     ('not (map (lambda (a) (append a (list "OP_NOT"))) (compile-expr-all (car args))))
+    ('invert (map (lambda (a) (append a (list "OP_INVERT"))) (compile-expr-all (car args))))
     ('getScriptCode (getScriptCode args))
     ('getScriptCode-with-header (getScriptCode-with-header args))
     ('buildOutput (buildOutput args))

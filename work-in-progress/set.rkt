@@ -5,7 +5,7 @@
 
 ;(bytes->hex-string (sha256-bytes (hex-string->bytes ""))) ; OP_0 OP_SHA256
 
-(define depth 9)
+(define depth 2)
 (define how-many-per-level 16)
 
 ; verification of the choosen depth 
@@ -31,7 +31,7 @@
       (println "Depth is too high !") '()))
 
 
-; todo voir le reverse de la liste des arguments
+; todo voir le reverse de la liste des arguments ; ça a l'air ok ? a toast
 ; voir comment on va deploy tout ça
 ; faire tous les checks dans le contract, et construire le state
 
@@ -40,7 +40,7 @@
   ; update the root of the tree
   `(public
      ; arguments ==> string value hint0-left hint0-right hint1-left ... to hint,(depth - 1)-right
-     ,(append '(string) ;real-new-root for debug
+     ,(append '(string real-new-root) ; for debug
               (flatten (for/list ((i (in-range depth)))
                          (list
                           (string->symbol (~a "hint" i "-left-first"))
@@ -48,6 +48,7 @@
                           (string->symbol (~a "hint" i "-left-second"))
                           (string->symbol (~a "hint" i "-right-second"))))))
      ; code of the function
+     ; en fait faut aussi calculer l'ancienne root, quel singe bordel
      (define new-root (call sha256 (1))) ; the new root starts from 1. More efficient to call sha256 on 1, then replacing it by the value lol
      ,(cons*
        (for/list ((i (in-range depth)))
@@ -57,51 +58,98 @@
                (right2 (string->symbol (~a "hint" i "-right-second"))))
            (cons* `(
                     ; après tester n'importe quoi au hasard c'est la config qui donne la taille minimale, wtf
-                    (define current-byte (bytes-get-first (bytes-delete-first string ,i) 1)) ;todo
-                    ; first "half byte"
-                    (define first-part (call bin2num ((& current-byte "0f"))))
+                    (define current-byte (bytes-get-first (bytes-delete-first string ,i) 1)) ;todo mieux
+                    (define first-part (call bin2num ((& current-byte 15))))
                     ; hint-left-first should be of size size(first-part), and same for hint-left-second
-                    (verify (= (destroy first-part) (/ (call getLen (,left1)) 32))) ;-1 ?
-                    (define second-part (call bin2num ((>> (& (destroy current-byte) "f0") 4))))
-                    (verify (= (destroy second-part) (/ (call getLen (,left2)) 32))) ;-1 ?
+                    (verify (= (destroy first-part) (/ (call getLen (,left1)) 32)))
+                    (define second-part (call bin2num ((>> (& (destroy current-byte) (call invert (15))) 4))))
+                    ;(verify (= first-part 0))
+                    ;(verify (= second-part 0))
+                    (verify (= (destroy second-part) (/ (call getLen (,left2)) 32)))
                     (modify new-root (call sha256 (,(+bytes* `((destroy ,left1) new-root (destroy ,right1))))))
                     (modify new-root (call sha256 (,(+bytes* `((destroy ,left2) new-root (destroy ,right2)))))))))))
      ; verification of hints
      ;(define real-old-root 0) ;debug
      ;(verify (= real-old-root old-root)) ;ok ;real-old-root is root parsed from state
-     ;(verify (= real-new-root new-root))
-     (destroy new-root)
+     (verify (= real-new-root new-root))
+     (destroy new-root) (drop real-new-root)
+     
      ; right now, everything is verified, we can do the computation
 
      ; update new root to the state
      ;todo
      ))
 
-(define first-root
+
+(ignore (begin
+          (define un (sha256-bytes (hex-string->bytes "")))
+          (define lun (bytes->list un))
+          (bytes->hex-string un)
+
+          (define deux (sha256-bytes (list->bytes (flatten (for/list ((d (in-range how-many-per-level))) lun)))))
+          (define ldeux (bytes->list deux))
+          (bytes->hex-string deux)
+
+          (define trois (sha256-bytes (list->bytes (flatten (for/list ((d (in-range how-many-per-level))) ldeux)))))
+          (bytes->hex-string trois)
+          ; first hint
+          ;(bytes->hex-string (list->bytes (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) lun))))
+
+          (sha256-bytes (list->bytes (append
+                                      (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (sha256-bytes (hex-string->bytes "")))))
+                                      (bytes->list (sha256-bytes (hex-string->bytes "01"))))))))
+
+
+; test of 1 deployment
+
+; root of the empty tree
+(define (compute-main-root n)
   (let ((tmp (sha256-bytes (hex-string->bytes "")))) ;we start from OP_0
-    (for/list ((i (in-range depth)))
+    (for/list ((i (in-range n)))
       (set! tmp (sha256-bytes (list->bytes (flatten (for/list ((_ (in-range how-many-per-level))) (bytes->list tmp)))))))
-    (bytes->hex-string tmp)))
+    tmp))
 
-(define un (sha256-bytes (hex-string->bytes "")))
-(define lun (bytes->list un))
-(bytes->hex-string un)
+(define first-root depth)
+;(bytes->hex-string first-root)
 
-(define deux (sha256-bytes (list->bytes (flatten (for/list ((d (in-range how-many-per-level))) lun)))))
-(define ldeux (bytes->list deux))
-(bytes->hex-string deux)
+; replacement of 0000...000 into something else
+; computation of the new root
 
-(define trois (sha256-bytes (list->bytes (flatten (for/list ((d (in-range how-many-per-level))) ldeux)))))
+; first subroot
+(define un (sha256-bytes (hex-string->bytes "01")))
+; second
+(define deux (sha256-bytes  (list->bytes (append
+                                          (bytes->list un)
+                                          (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (compute-main-root 0))))))))
+; third
+(define trois (sha256-bytes (list->bytes (append
+                                          (bytes->list deux)
+                                          (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (compute-main-root 1))))))))
+; quatre
+(define quatre (sha256-bytes (list->bytes (append
+                                          (bytes->list trois)
+                                          (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (compute-main-root 2))))))))
+; cinq
+(define cinq (sha256-bytes (list->bytes (append
+                                          (bytes->list quatre)
+                                          (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (compute-main-root 3))))))))
+
+
+; old root
+(bytes->hex-string (compute-main-root 4))
+
+; new root
+(bytes->hex-string cinq)
+
+
 (bytes->hex-string trois)
-; first hint
-;(bytes->hex-string (list->bytes (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) lun))))
 
-(ignore (bytes->hex-string
- (sha256-bytes (list->bytes (append
-                             (flatten (for/list ((_ (in-range (- how-many-per-level 1)))) (bytes->list (sha256-bytes (hex-string->bytes "")))))
-                             (bytes->list (sha256-bytes (hex-string->bytes "01"))))))))
+; list of hints
+(flatten (for/list ((i (in-range depth))) (cons
+                                           (bytes->hex-string (compute-main-root (* 2 i)))
+                                           (bytes->hex-string (compute-main-root (+ 1 (* 2 i)))))))
 
-first-root
+
 
 (contract->opcodes contract)
 
