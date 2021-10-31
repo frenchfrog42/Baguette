@@ -7,3 +7,5 @@ Todo changer les liens docs tout ça
 Le pull depuis replit marche bien
 
 Refaire les macros comme conseillé
+
+https://stackoverflow.com/questions/1125968/git-how-do-i-force-git-pull-to-overwrite-local-files + git reset --hard remotes/origin/main
