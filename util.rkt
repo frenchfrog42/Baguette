@@ -35,5 +35,29 @@
   (define list-of-char (string-split s))
   (map string->symbol list-of-char))
 
+; Conversion of opcodes to hex. Useful for metaprogramming
+(define (opcode->hex a)
+  (match a
+    ("OP_1" "51")
+    ("OP_2" "52")
+    ("OP_3" "53")
+    ("OP_4" "54")
+    ("20" "0120")
+    ("40" "0140")
+    ("OP_SPLIT" "7f")
+    ("OP_SWAP" "7c")
+    ("OP_BIN2NUM" "81")
+    ("OP_PICK" "79")
+    ("OP_EQUAL" "87")
+    ("OP_VERIFY" "69")
+    ("OP_1ADD" "8b")
+    ("OP_ROLL" "7a")
+    ("OP_DROP" "75")
+    ("OP_ROT" "7b")
+    (_ (error (~a "opcode->hex, your opcode " a " is not in the list")))
+
+
+    ))
+
 ; export
 (provide (all-defined-out))

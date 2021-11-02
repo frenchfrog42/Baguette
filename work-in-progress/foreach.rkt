@@ -5,21 +5,6 @@
 (require "../hashtable.rkt")
 (require "../util.rkt")
 
-; todo mettre ça dans util
-(define (opcode->hex a)
-  (match a
-    ("OP_1" "51")
-    ("OP_2" "52")
-    ("20" "0120")
-    ("40" "0140")
-    ("OP_SPLIT" "7f")
-    ("OP_SWAP" "7c")
-    ("OP_BIN2NUM" "81")
-    ("OP_PICK" "79")
-    ("OP_EQUAL" "87")
-    ("OP_VERIFY" "69")
-    ("OP_1ADD" "8b")))
-
 ; useful in the created code by the foreach macro
 (define (create-code-once function)
   (define code "")
