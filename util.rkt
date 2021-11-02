@@ -55,8 +55,6 @@
     ("OP_DROP" "75")
     ("OP_ROT" "7b")
     (_ (error (~a "opcode->hex, your opcode " a " is not in the list")))
-
-
     ))
 
 ; export

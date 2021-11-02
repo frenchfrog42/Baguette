@@ -178,6 +178,7 @@
 
 
 (contract->opcodes contract)
+;(profile-function contract)
 
 
 

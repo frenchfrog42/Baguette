@@ -549,6 +549,8 @@
   ;(displayln code)
   ; code is a s-expr
   (define code-iter (if (and (list? code) (equal? 'call (first code))) (third code) code))
+  ; if we are a cons
+  (if (and (list? code) (equal? 'cons (first code))) (begin (set! indent "") (set! last-last-indent 0)) '())
   (define list-of-sexpr (for/list ((e code-iter)
                                    #:when (and
                                            ; exclude atomic expression and ignore statements
