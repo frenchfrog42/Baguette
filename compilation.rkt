@@ -462,6 +462,15 @@
                                                      (bytes-get-first ,m pos)
                                                      (bytes-delete-first (destroy ,m) (+ 64 (destroy pos)))))
                                          )))))
+    ; not tested
+    ('hashmap-exists (match-let (((list m_ key_ hint) args) ((list m key) (list (gensym) (gensym))))
+                       (compile-expr-all (cons*
+                                          `((define ,m ,m_)
+                                            (define ,key ,key_)
+                                            (define pos (* 64 ,hint))
+                                            (define a (bytes-get-first (bytes-delete-first (destroy ,m) (destroy pos)) 32))
+                                            (= (call sha256 ((destroy ,key))) (destroy a))
+                                            )))))
     ))
 
 ;(define (comp-save-all e) (save-stack (compile-expr-all e)))

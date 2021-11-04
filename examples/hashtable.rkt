@@ -57,11 +57,6 @@
                              ))
 
 
-; macro hashtable + state
-(define (with-hashmap l)
-  (map (lambda (a) (unroll-addhint-final-vyper a)) l))
-
-
 ; ok
 (contract->opcodes (vyper-create-final
                     '(map)

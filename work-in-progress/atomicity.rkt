@@ -1,5 +1,6 @@
 #lang racket
 (require "../compilation.rkt")
+(require "../hashtable.rkt")
 (require "../util.rkt")
 (require "../vyper.rkt")
 (require file/sha1)
@@ -36,20 +37,20 @@
 
 (define n 3)
 (define list-of-args (for/list ((i (in-range n))) (string->symbol (~a "arg" i))))
-(define hashmap-exists '+bytes)
-(define magical-function `(public
-                            ; args
-                            ,list-of-args
-                            ; code
-                            ; verify each function is part of the map
-                            (define map ,hashmap-set)
-                            ,(cons* (for/list ((a list-of-args)) `(verify (,hashmap-exists map ,a))))
-                            ; prepare the next output (parse state, etc...). Todo later
-                            (define scriptCode "")
-                            ; concatenate each function to form the next script code
-                            (modify scriptCode (+bytes scriptCode ,(+bytes* list-of-args)))
-                            ; ensure the next output is the previous function
-                            ; todo later
-                            ))
+(define magical-function (unroll-addhint-final
+                             `(public
+                                ; args
+                                ,list-of-args
+                                ; code
+                                ; verify each function is part of the map
+                                (define map ,hashmap-set)
+                                ,(cons* (for/list ((a list-of-args)) `(verify (hashmap-exists map ,a))))
+                                ; prepare the next output (parse state, etc...)
+                                (define scriptCode "") ; todo later, we assume we parsed state and pushed everything on the stack
+                                ; concatenate each function to form the next script code
+                                (modify scriptCode (+bytes scriptCode ,(+bytes* list-of-args)))
+                                ; ensure the next output is the previous function
+                                ; todo later
+                                )))
 
 (contract->opcodes magical-function)

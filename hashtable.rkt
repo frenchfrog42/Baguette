@@ -46,7 +46,7 @@
         res)))
     ; delete
     ((list fonction map_ key_)
-     #:when (equal? (~a fonction) "hashmap-delete") ;todo delete pas besoin de value
+     #:when (or (equal? (~a fonction) "hashmap-delete") (equal? (~a fonction) "hashmap-exists")) ;todo delete pas besoin de value
      (begin
        (define-values (map res1) (unroll-hashtable-operation map_ (+ nb 1))) ; On rajoute 1 hint
        (define-values (key res) (unroll-hashtable-operation key_ res1))
@@ -81,6 +81,10 @@
 
 ; on ne drop pas la dernière valeur quand on unroll avec vyper
 (define (unroll-addhint-final-vyper fonction) (unroll-addhint-final fonction #f))
+
+; macro hashtable + state
+(define (with-hashmap l)
+  (map (lambda (a) (unroll-addhint-final-vyper a)) l))
 
 ; export
 (provide (all-defined-out))
