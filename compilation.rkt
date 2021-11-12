@@ -471,6 +471,22 @@
                                             (define a (bytes-get-first (bytes-delete-first (destroy ,m) (destroy pos)) 32))
                                             (= (call sha256 ((destroy ,key))) (destroy a))
                                             )))))
+    ; push tx. Tested, shouldn't change, but will be rewritten in lisp instead of assembly
+    ('pushtx (save-stack (begin
+                           (push-stack)
+                           (compile-expr-all (cons* `(
+                                                      "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817980220"
+                                                      (define tx-arg ,(car args))
+                                                      "OP_HASH256"
+                                                      "OP_1ADD"
+                                                      ;(modify my-tx-arg (+ 1 my-tx-arg)) ;should compile to 1ADD lmao OP_1 OP_OVER OP_ADD OP_SWAP OP_DROP
+                                                      "OP_CAT"
+                                                      "41" ;sighashflags
+                                                      "OP_CAT"
+                                                      "02b405d7f0322a89d0f9f3a98e6f938fdc1c969a8d1382a2bf66a71ae74a1e83b0"
+                                                      "OP_CHECKSIGVERIFY"
+                                                      ;(drop tx-arg) checksigverify already drops the argument
+                                                      ))))))
     ))
 
 ;(define (comp-save-all e) (save-stack (compile-expr-all e)))
