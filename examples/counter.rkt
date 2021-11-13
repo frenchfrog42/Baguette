@@ -2,6 +2,7 @@
 
 (require "../compilation.rkt")
 (require "../vyper.rkt")
+(require "../util.rkt")
 
 
 
@@ -11,6 +12,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define compteur '(public (tx-arg amount-arg)
+                          (call pushtx (tx-arg))
                           (define scriptCode (call getScriptCode (tx-arg)))
                           (define counter (call bin2num ((bytes-get-last scriptCode 1))))
                           (define scriptCode_ (+bytes (bytes-delete-last (destroy scriptCode) 1) (+ 1 (destroy counter))))
@@ -57,6 +59,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define compteur-opt '(public (tx-arg amount-arg)
+                              ;(call pushtx (tx-arg))
                               (define scriptCode-with-header (call getScriptCode-with-header (tx-arg)))
                               (define counter (call bin2num ((bytes-get-last scriptCode-with-header 1))))
                               (define scriptCode_ (+bytes (bytes-delete-last (destroy scriptCode-with-header) 1) (+ 1 (destroy counter))))
@@ -65,7 +68,14 @@
                               (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
                               ))
 
-; In the script code you need to replace s1 with 3d (which is 59). Todo write a code that does this
-(contract->opcodes compteur-opt #f) ; Fonctionne. 50bytes
+(define size (length (string-split (contract->opcodes compteur-opt))))
+(define (replace-compteur-opt code) (string-replace code "s1" (first (compile-int (+
+                                                                                   size
+                                                                                   2 ;op return and state
+                                                                                   1 ;s1 count for 2
+                                                                                   4 ;pouet
+                                                                                   )))))
+(replace-compteur-opt (contract->opcodes compteur-opt)) ; Fonctionne. 49bytes
+
 (profile-function-simple compteur-opt)
 (profile-function compteur-opt)
