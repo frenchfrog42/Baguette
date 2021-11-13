@@ -120,19 +120,21 @@
            (/ 1 0))))))
 
 ; Obvious pattern to remove
-; todo, iter until fixpoint
+(define liste-naive-opt '(
+                          ; stack transformation
+                          (#rx"OP_SWAP OP_SWAP " "")
+                          ; opcodes that are a shortcort for another
+                          (#rx"OP_1 OP_ADD" "OP_1ADD")
+                          (#rx"OP_1 OP_SUB" "OP_1SUB")
+                          ; commutative op
+                          (#rx"OP_SWAP OP_ADD" "OP_ADD")
+                          ))
+(define (naive-opt-aux expr)
+  (regexp-replaces expr liste-naive-opt))
+
 (define (naive-opt expr)
-  (begin
-    ; useless things
-    (set! expr (regexp-replace #rx"OP_SWAP OP_SWAP " expr ""))
-    ; opcodes that are a reduction of another
-    (set! expr (regexp-replace #rx"OP_1 OP_ADD" expr "OP_1ADD"))
-    (set! expr (regexp-replace #rx"OP_1 OP_SUB" expr "OP_1SUB"))
-    ;
-    (set! expr (regexp-replace #rx"OP_SWAP OP_ADD" expr "OP_ADD"))
-    ; return
-    expr
-  ))
+  (define new-expr (naive-opt-aux expr))
+  (if (string=? new-expr expr) expr (naive-opt new-expr)))
 
 ; Compilation of non commutative binary operation
 (define (compile-binary-op-all-no-commute op expr)
