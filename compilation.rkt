@@ -120,8 +120,19 @@
            (/ 1 0))))))
 
 ; Obvious pattern to remove
+; todo, iter until fixpoint
 (define (naive-opt expr)
-  (regexp-replace #rx"OP_SWAP OP_SWAP " expr ""))
+  (begin
+    ; useless things
+    (set! expr (regexp-replace #rx"OP_SWAP OP_SWAP " expr ""))
+    ; opcodes that are a reduction of another
+    (set! expr (regexp-replace #rx"OP_1 OP_ADD" expr "OP_1ADD"))
+    (set! expr (regexp-replace #rx"OP_1 OP_SUB" expr "OP_1SUB"))
+    ;
+    (set! expr (regexp-replace #rx"OP_SWAP OP_ADD" expr "OP_ADD"))
+    ; return
+    expr
+  ))
 
 ; Compilation of non commutative binary operation
 (define (compile-binary-op-all-no-commute op expr)
