@@ -52,6 +52,7 @@
      (/ "OP_DIV")
      (= "OP_EQUAL")
      (< "OP_LESSTHAN")
+     (<= "OP_LESSTHANOREQUAL")
      (& "OP_AND")
      (&& "OP_AND") ;todo
      (<< "OP_LSHIFT")
@@ -361,13 +362,19 @@
                   (cons (define l (call fromLEUnsigned (destroy header)))
                         (bytes-get-first (bytes-delete-first (destroy tx) 1) (destroy l))))))))
 
+; https://learnmeabitcoin.com/technical/varint
 (define (writeVarint tx)
   (car (compile-expr-all
         `(cons (define txici ,tx)
                (cons (define n (call getLen (txici)))
-                     (if (< n "fd00")
-                         (+bytes (call toLEUnsigned ((destroy n) 1)) (destroy txici)) ;todo
-                         (+bytes (+bytes "fd" (call toLEUnsigned ((destroy n) 2))) (destroy txici))))))))
+                     (if (<= n "fc00")
+                         (+bytes (call toLEUnsigned ((destroy n) 1)) (destroy txici))
+                         (if (<= n "ffff00")
+                             (+bytes (+bytes "fd" (call toLEUnsigned ((destroy n) 2))) (destroy txici))
+                             (if (<= n "ffffffff00")
+                                 (+bytes (+bytes "fe" (call toLEUnsigned ((destroy n) 4))) (destroy txici))
+                                 (+bytes (+bytes "ff" (call toLEUnsigned ((destroy n) 8))) (destroy txici))
+                         ))))))))
 
 (define (writeVarint-compile-small tx)
   (compile-expr-all
