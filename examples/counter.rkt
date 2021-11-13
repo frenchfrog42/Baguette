@@ -21,8 +21,8 @@
                           (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
                     ))
 
-(contract->opcodes compteur) ; Fonctionne. 247bytes
-(profile-function-simple compteur) ;247bytes
+(contract->opcodes compteur) ; Fonctionne. 293bytes
+(profile-function-simple compteur)
 (profile-function compteur)
 
 
@@ -35,8 +35,8 @@
 (define compteur-nomemory
   (garbage-collector (remove-destroy-variable compteur) #f))
 
-(contract->opcodes compteur-nomemory) ; Fonctionne. 262bytes
-(profile-function-simple compteur-nomemory) ;260 because args changed
+(contract->opcodes compteur-nomemory) ; Fonctionne. 308bytes
+(profile-function-simple compteur-nomemory) ;different because args order is changed
 (profile-function compteur-nomemory)
 
 
