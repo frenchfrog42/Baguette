@@ -510,7 +510,8 @@
                                                  (flatten (map (lambda (a) (string-split a " "))
                                                                (flatten c))))))))
 
-(define (opcodes->size c) (length (string-split c " ")))
+(define (opcodes? c) (and (string? c) (> (string-length c) 2) (string=? (substring c 0 3) "OP_")))
+(define (opcodes->size c) (foldl (lambda (e acc) (+ acc (if (opcodes? e) 1 (/ (string-length e) 2)))) 0 (string-split c " ")))
 
 (define (contract->opcodes c (keep-args-order #t))
   (set-approx #f) (set-stack '()) ; make sure approx is off and stack is empty
@@ -520,7 +521,7 @@
         (printf (~a "You are compiling a contract" (if keep-args-order "" " with a different order of args of public function") "\n"))
         (define res (first (compile-contract-all (cdr c) keep-args-order)))
         (define code-contract (naive-opt (ir->opcodes res)))
-        (printf (~a "Size of the code: " (length (string-split code-contract)) "\n"))
+        (printf (~a "Size of the code: " (opcodes->size code-contract) "\n"))
         (printf "Code of the contract:\n")
         code-contract)
       ; else
@@ -542,7 +543,7 @@
               (define code-function (second (string-split res " || ")))
               (printf (~a "Order of arguments: " (car (string-split res " || ")) "\n"))
               (if (not keep-args-order) (printf (~a "Original order: " (car (string-split (last allcomp) " || ")) "\n")) '())
-              (printf (~a "Size of your function: " (length (string-split code-function)) (if keep-args-order (~a ", by allowing the changing order, the size would be " (length (string-split (second (string-split opt-res " || "))))) "") "\n"))
+              (printf (~a "Size of your function: " (opcodes->size code-function) (if keep-args-order (~a ", by allowing the changing order, the size would be " (opcodes->size (second (string-split opt-res " || ")))) "") "\n"))
               (printf "Code of the function\n")
               code-function)
             ; else: it's something else
