@@ -408,7 +408,7 @@
     ('getScriptCode (getScriptCode args))
     ('getScriptCode-with-header (getScriptCode-with-header args))
     ('buildOutput (buildOutput args))
-    ('buildOutputP2PKH (buildOutput (list (list "OP_DUP OP_HASH160" "14" (first args) "OP_EQUALVERIFY" "OP_CHECKSIG") (second args)))) ; todo à tester
+    ('buildOutputP2PKH (buildOutput (list (list "OP_DUP OP_HASH160" "14" (first args) "OP_EQUALVERIFY" "OP_CHECKSIG") (second args)))) ; todo à tester (surement faux)
     ('buildOutput-with-header (buildOutput-with-header args))
     ;('buildOutput (list '("arg + call buildOutput")))
     ('hashOutputs (hashOutputs args))
@@ -420,14 +420,22 @@
     ('fromLEUnsigned (fromLEUnsigned args))
     ('toLEUnsigned (toLEUnsigned (first args) (second args)))
     ('bin2num (map (lambda (a) (append a (list '("OP_BIN2NUM")))) (compile-expr-all (car args))))
-    ('num2bin (append
-               (car (compile-expr-all (first args)))
-               (car (compile-expr-all (second args)))
-               (list '("OP_NUM2BIN"))))
-    ('checksigverify (append
-                      (car (compile-expr-all (first args)))
-                      (car (compile-expr-all (second args)))
-                      (list '("OP_CHECKSIGVERIFY"))))
+    ('num2bin (let ((f (car (compile-expr-all (first args)))))
+                (push-stack)
+                (let ((s (car (compile-expr-all (second args)))))
+                  (drop-stack)
+                  (append
+                   f
+                   s
+                   (list '("OP_NUM2BIN"))))))
+    ('checksigverify (let ((f (car (compile-expr-all (first args)))))
+                       (push-stack)
+                       (let ((s (car (compile-expr-all (second args)))))
+                         (drop-stack)
+                         (append
+                          f
+                          s
+                          (list '("OP_CHECKSIGVERIFY"))))))
     ('hash256 (map (lambda (a) (append a (list '("OP_HASH256")))) (compile-expr-all (car args))))
     ('sha256 (map (lambda (a) (append a (list '("OP_SHA256")))) (compile-expr-all (car args))))
     ; hashmap
@@ -492,21 +500,33 @@
                                             (= (call sha256 ((destroy ,key))) (destroy a))
                                             )))))
     ; push tx. Tested, shouldn't change, but will be rewritten in lisp instead of assembly
-    ('pushtx (save-stack (begin
-                           (push-stack)
-                           (compile-expr-all (cons* `(
-                                                      "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817980220"
-                                                      (define tx-arg ,(car args))
-                                                      "OP_HASH256"
-                                                      "OP_1ADD"
-                                                      ;(modify my-tx-arg (+ 1 my-tx-arg)) ;should compile to 1ADD lmao OP_1 OP_OVER OP_ADD OP_SWAP OP_DROP
-                                                      "OP_CAT"
-                                                      "41" ;sighashflags
-                                                      "OP_CAT"
-                                                      "02b405d7f0322a89d0f9f3a98e6f938fdc1c969a8d1382a2bf66a71ae74a1e83b0"
-                                                      "OP_CHECKSIGVERIFY"
-                                                      ;(drop tx-arg) checksigverify already drops the argument
-                                                      ))))))
+    ('pushtx-assembly (save-stack (begin
+                                    (push-stack)
+                                    (compile-expr-all (cons* `(
+                                                               "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817980220"
+                                                               (define tx-arg ,(car args))
+                                                               "OP_HASH256"
+                                                               "OP_1ADD"
+                                                               ;(modify my-tx-arg (+ 1 my-tx-arg)) ;should compile to 1ADD lmao OP_1 OP_OVER OP_ADD OP_SWAP OP_DROP
+                                                               "OP_CAT"
+                                                               "41" ;sighashflags
+                                                               "OP_CAT"
+                                                               "02b405d7f0322a89d0f9f3a98e6f938fdc1c969a8d1382a2bf66a71ae74a1e83b0"
+                                                               "OP_CHECKSIGVERIFY"
+                                                               ;(drop tx-arg) checksigverify already drops the argument
+                                                               ))))))
+    ('pushtx (compile-expr-all (cons* `(
+                                        (define temp-first-part "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817980220")
+                                        (define my-tx ,(car args)) ;copy tx arg
+                                        (define my-tx-hashed (call hash256 ((destroy my-tx))))
+                                        (define my-tx-hashed-plus1 (+ 1 (destroy my-tx-hashed)))
+                                        (define first-part (+bytes
+                                                            (destroy temp-first-part)
+                                                            (destroy my-tx-hashed-plus1)))
+                                        (define sighashflags "41")
+                                        (define signature (+bytes (destroy first-part) (destroy sighashflags)))
+                                        (define pubkey "02b405d7f0322a89d0f9f3a98e6f938fdc1c969a8d1382a2bf66a71ae74a1e83b0")
+                                        (call checksigverify ((destroy signature) (destroy pubkey)))))))
     ))
 
 ;(define (comp-save-all e) (save-stack (compile-expr-all e)))

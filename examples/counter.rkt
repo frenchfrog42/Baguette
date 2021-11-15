@@ -12,7 +12,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define compteur '(public (tx-arg amount-arg)
-                          (call pushtx (tx-arg))
+                          (call pushtx-assembly (tx-arg))
                           (define scriptCode (call getScriptCode (tx-arg)))
                           (define counter (call bin2num ((bytes-get-last scriptCode 1))))
                           (define scriptCode_ (+bytes (bytes-delete-last (destroy scriptCode) 1) (+ 1 (destroy counter))))
@@ -21,7 +21,7 @@
                           (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
                     ))
 
-(contract->opcodes compteur) ; Fonctionne. 293bytes
+(contract->opcodes compteur) ; Fonctionne. 293bytes ;displayed size not the same for pushtx-assembly and pushtx (ah non en fait wtf)
 (profile-function-simple compteur)
 (profile-function compteur)
 
