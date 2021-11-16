@@ -1,0 +1,19 @@
+name: CI for simple tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: sudo add-apt-repository ppa:plt/racket -y; sudo apt-get install racket -y
+    - name: Run tests
+      run: racket test/short.rkt
