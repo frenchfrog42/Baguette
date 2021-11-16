@@ -31,6 +31,3 @@
 (test '(a b c d) (list (apply-all '((destroy a) (destroy b) (destroy c) (destroy d)) '+)) "OP_ADD OP_ADD OP_ADD")
 ;(test '(c a d b) (list (apply-all '((destroy a) (destroy b) (destroy c) (destroy d)) '+)) "OP_ADD OP_ADD OP_ADD OP_ADD") ;todo one day
 ; todo make + a n-ary operator and test all permutations
-
-; bad test for CI
-(test '() '(0) "OP_1")
