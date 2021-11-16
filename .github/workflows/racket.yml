@@ -14,8 +14,8 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install racket
-      run: sudo add-apt-repository ppa:plt/racket -y
+      run: sudo add-apt-repository ppa:plt/racket -y;
            sudo apt-get install racket -y
     - name: Run all tests
-      run: racket test/short.rkt
+      run: racket test/short.rkt;
            racket test/push_tx.rkt
