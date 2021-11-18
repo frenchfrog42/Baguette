@@ -124,11 +124,16 @@
 (define liste-naive-opt '(
                           ; stack transformation
                           (#rx"OP_SWAP OP_SWAP " "")
+                          (#rx"OP_SWAP OP_DROP" "OP_NIP")
                           ; opcodes that are a shortcort for another
                           (#rx"OP_1 OP_ADD" "OP_1ADD")
                           (#rx"OP_1 OP_SUB" "OP_1SUB")
                           ; commutative op
                           (#rx"OP_SWAP OP_ADD" "OP_ADD")
+                          (#rx"OP_SWAP OP_MUL" "OP_MUL")
+                          (#rx"OP_SWAP OP_AND" "OP_AND")
+                          (#rx"OP_SWAP OP_OR" "OP_OR")
+                          (#rx"OP_SWAP OP_XOR" "OP_XOF")
                           ))
 (define (naive-opt-aux expr)
   (regexp-replaces expr liste-naive-opt))
@@ -327,7 +332,9 @@
   res)))
 
 (define (toLEUnsigned n l)
-  (car (compile-expr-all (cons* `((define tmp-m (call num2bin (,n (+ ,l 1))))
+  (define l++ `(+ ,l 1))
+  (if (number? l) (set! l++ (+ l 1)) '())
+  (car (compile-expr-all (cons* `((define tmp-m (call num2bin (,n ,l++)))
                                   (define taille-tmp-m (call getLen (tmp-m)))
                                   (bytes-get-first (destroy tmp-m) (- (destroy taille-tmp-m) 1)))))))
 (define (fromLEUnsigned bytes)

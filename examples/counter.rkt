@@ -21,7 +21,7 @@
                           (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
                     ))
 
-(contract->opcodes compteur) ; Fonctionne. 293bytes ;displayed size not the same for pushtx-assembly and pushtx (ah non en fait wtf)
+(contract->opcodes compteur) ; Fonctionne. 288bytes
 (profile-function-simple compteur)
 (profile-function compteur)
 
@@ -35,7 +35,7 @@
 (define compteur-nomemory
   (garbage-collector (remove-destroy-variable compteur) #f))
 
-(contract->opcodes compteur-nomemory) ; Fonctionne. 308bytes
+(contract->opcodes compteur-nomemory) ; Fonctionne. 302bytes
 (profile-function-simple compteur-nomemory) ;different because args order is changed
 (profile-function compteur-nomemory)
 
