@@ -31,3 +31,12 @@
 (test '(a b c d) (list (apply-all '((destroy a) (destroy b) (destroy c) (destroy d)) '+)) "OP_ADD OP_ADD OP_ADD")
 ;(test '(c a d b) (list (apply-all '((destroy a) (destroy b) (destroy c) (destroy d)) '+)) "OP_ADD OP_ADD OP_ADD OP_ADD") ;todo one day
 ; todo make + a n-ary operator and test all permutations
+
+; 0 use of a in modify
+(test '(a) '((modify a 2)) "OP_DROP OP_2")
+; 1 use of a in modify
+(test '(a) '((modify a (+ 1 a))) "OP_1ADD")
+(test '(a) '((modify a (+ a 1))) "OP_1ADD")
+; 2 use of a in modify
+; correct for now, but not really optimal
+;(test '(a) '((modify a (+ a a))) "OP_DUP OP_OVER OP_ADD OP_NIP")

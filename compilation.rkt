@@ -122,6 +122,7 @@
 
 ; Obvious pattern to remove
 (define liste-naive-opt '(
+                          ; todo extract useful optims from https://github.com/Bitcoin-com/cashscript/blob/master/packages/utils/src/cashproof-optimisations.ts
                           ; stack transformation
                           (#rx"OP_SWAP OP_SWAP " "")
                           (#rx"OP_SWAP OP_DROP" "OP_NIP")
@@ -262,6 +263,21 @@
    (list "OP_0")
    (for/list ((i (in-range (length l)))) "OP_ENDIF")))))
 
+; for modify
+(define (compte-var code var)
+  (define this (lambda (c) (compte-var c var)))
+  (match code
+    (v #:when (eq? v var) 1)
+    ((cons a b) (+ (this a) (this b)))
+    (_ 0)))
+(define (replace-var-by-destroy code var)
+  (define this (lambda (c) (replace-var-by-destroy c var)))
+  (match code
+    (v #:when (eq? v var) (list 'destroy var))
+    ((cons a b) (cons (this a) (this b)))
+    (_ code)))
+
+
 (define (compile-expr-all e)
   (begin
    ;(printf "Expr: ~a Stack: ~a~n" e stack)
@@ -279,12 +295,6 @@
      ; binary expression
      ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
      ((cons op reste) #:when (binary-op? op) (compile-binary-op-all-no-commute (compile-op op) reste))
-     ; when in approximation mode ;todo
-     (var #:when (and approx (symbol? var)) '(("pick10")))
-     ((list 'destroy var) #:when (and approx (symbol? var)) '(("pick10")))
-     ((list 'drop var) #:when (and approx (symbol? var)) '(("pick10")))
-     ((list 'modify var) #:when (and approx (symbol? var)) '(("pick10")))
-     ((list 'copy var) #:when (and approx (symbol? var)) '(("pick10")))
      ; var
      (var #:when (and (symbol? var) (member var stack))
           (list (compile-var var)))
@@ -295,7 +305,19 @@
                        (list (append (compile-destroy-var var) '("OP_DROP"))))
      ((list 'destroy var) (printf "Use of destroyed variable ~a with stack ~a. This is invalid\n" var stack))
      ; modify
-     ((list 'modify var expr) (compile-expr-all `(cons (define tmp-var-modify ,expr) (cons (drop ,var) (define ,var (destroy tmp-var-modify))))))
+     ((list 'modify var expr) ;(compile-expr-all `(cons (define tmp-var-modify ,expr) (cons (drop ,var) (define ,var (destroy tmp-var-modify)))))) <-- old expr
+      (match (compte-var expr var)
+        ;if var is in expr only once, change the first expr to a destroy, and execute the expr
+        (1 (let ((res (compile-expr-all (replace-var-by-destroy expr var))))
+             (new-var var)
+             res))
+        ; If the var isn't here, we drop the var and execute the expr
+        (0 (compile-expr-all `(cons (drop ,var) ,expr)))
+        ; then, the var is here multiple time, we first execute the expr and after only drop the var
+        (_ (compile-expr-all (cons* `(
+                                      (define tmp-var-modify ,expr)
+                                      (drop ,var)
+                                      (define ,var (destroy tmp-var-modify))))))))
      ; copy
      ((list 'copy var) #:when (and (symbol? var) (member var stack))
                        (list (compile-var var)))

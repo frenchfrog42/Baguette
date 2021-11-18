@@ -18,7 +18,7 @@
     ;(drop tx-arg) checksigverify already drops the argument
     ))
 
-(define lispcoded '(
+(define lispcoded-no-modify '(
                     (define temp-first-part "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817980220")
                     (define my-tx tx-arg) ;copy tx arg
                     (define my-tx-hashed (call hash256 ((destroy my-tx))))
@@ -31,8 +31,23 @@
                     (define pubkey "02b405d7f0322a89d0f9f3a98e6f938fdc1c969a8d1382a2bf66a71ae74a1e83b0")
                     (call checksigverify ((destroy signature) (destroy pubkey)))))
 
+(define lispcoded '(
+                    (define temp-first-part "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817980220")
+                    (define my-tx tx-arg) ;copy tx arg
+                    (modify my-tx (call hash256 (my-tx)))
+                    (modify my-tx (+ 1 my-tx))
+                    (modify my-tx (+bytes (destroy temp-first-part) my-tx))
+                    (define sighashflags "41")
+                    (define signature (+bytes (destroy my-tx) (destroy sighashflags)))
+                    (define pubkey "02b405d7f0322a89d0f9f3a98e6f938fdc1c969a8d1382a2bf66a71ae74a1e83b0")
+                    (call checksigverify ((destroy signature) (destroy pubkey)))))
+
 ; todo faire un appel a pushtx
 
+(if (string=?
+     (contract->opcodes (append '(public (tx-arg)) lispcoded-no-modify))
+     (contract->opcodes (append '(public (tx-arg)) lispcoded)))
+    '() (exit 1))
 (if (string=?
      (contract->opcodes (append '(public (tx-arg)) lispcoded))
      (contract->opcodes handcoded))
