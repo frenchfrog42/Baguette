@@ -305,14 +305,15 @@
                        (list (append (compile-destroy-var var) '("OP_DROP"))))
      ((list 'destroy var) (printf "Use of destroyed variable ~a with stack ~a. This is invalid\n" var stack))
      ; modify
-     ((list 'modify var expr) ;(compile-expr-all `(cons (define tmp-var-modify ,expr) (cons (drop ,var) (define ,var (destroy tmp-var-modify)))))) <-- old expr
+     ((list 'modify-simple var expr) (compile-expr-all `(cons (define tmp-var-modify ,expr) (cons (drop ,var) (define ,var (destroy tmp-var-modify))))))
+     ((list 'modify var expr) ;(compile-expr-all `(cons (define tmp-var-modify ,expr) (cons (drop ,var) (define ,var (destroy tmp-var-modify))))))
       (match (compte-var expr var)
         ;if var is in expr only once, change the first expr to a destroy, and execute the expr
         (1 (let ((res (compile-expr-all (replace-var-by-destroy expr var))))
              (new-var var)
              res))
         ; If the var isn't here, we drop the var and execute the expr
-        (0 (compile-expr-all `(cons (drop ,var) ,expr)))
+        (0 (let ((res (compile-expr-all `(cons (drop ,var) ,expr)))) (new-var var) res))
         ; then, the var is here multiple time, we first execute the expr and after only drop the var
         (_ (compile-expr-all (cons* `(
                                       (define tmp-var-modify ,expr)

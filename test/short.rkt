@@ -40,3 +40,8 @@
 ; 2 use of a in modify
 ; correct for now, but not really optimal
 ;(test '(a) '((modify a (+ a a))) "OP_DUP OP_OVER OP_ADD OP_NIP")
+
+(compile-expr-all '(call hash256 (2))) ;l'api a call est mal faite
+(compile-expr-all '(+ 1 2))
+
+
