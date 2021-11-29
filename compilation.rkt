@@ -276,9 +276,19 @@
     (v #:when (eq? v var) (list 'destroy var))
     ((cons a b) (cons (this a) (this b)))
     (_ code)))
+(define (replace-var-by-destroy-once code var)
+  (define this (lambda (c) (replace-var-by-destroy-once c var)))
+  (match code
+    (v #:when (eq? v var) (list 'destroy var))
+    ((cons a b) (let ((res-a (this a)))
+                  (if (eq? a res-a)
+                      (cons a (this b))
+                      (cons res-a b))))
+    (_ code)))
 
 
-(define (compile-expr-all e)
+(define/contract (compile-expr-all e)
+  (unconstrained-domain-> (lambda (elem) (and (list? elem) (or (empty? elem) (list? (first elem))))))
   (begin
    ;(printf "Expr: ~a Stack: ~a~n" e stack)
    (let ((res 
@@ -286,9 +296,7 @@
      ; int
      (expr #:when (number? expr) (list (compile-int expr)))
      ; call. Idem rajouter des elements sur la stack
-     ((list 'call nom args) (list (append
-                                   ;(for/list ((expr args)) (car (compile-expr-all expr)))
-                                   (call-call nom args)))) ; todo remplacer et mettre juste "(call-call nom args)" et voir si ça casse rien
+     ((list 'call nom args) (call-call nom args)) ; todo remplacer et mettre juste "(call-call nom args)" et voir si ça casse rien
      ; define
      ((list 'define var expr) (let ((res (compile-expr-all expr))) (new-var var) res)) ; todo
      ;((list 'push-var var) (new-var var) res)) ; todo make a expression to push a var to the stack when we write assembly
@@ -303,7 +311,9 @@
                           (list (compile-destroy-var var)))
      ((list 'drop var) #:when (and (symbol? var) (member var stack))
                        (list (append (compile-destroy-var var) '("OP_DROP"))))
-     ((list 'destroy var) (printf "Use of destroyed variable ~a with stack ~a. This is invalid\n" var stack))
+     ((list 'roll var) #:when (and (symbol? var) (member var stack))
+                          (let ((res (list (compile-destroy-var var)))) (new-var var) res))
+     ((list 'destroy var) (begin (printf "Use of destroyed variable ~a with stack ~a. This is invalid\n" var stack) '()))
      ; modify
      ((list 'modify-simple var expr) (compile-expr-all `(cons (define tmp-var-modify ,expr) (cons (drop ,var) (define ,var (destroy tmp-var-modify))))))
      ((list 'modify var expr) ;(compile-expr-all `(cons (define tmp-var-modify ,expr) (cons (drop ,var) (define ,var (destroy tmp-var-modify))))))
@@ -314,11 +324,23 @@
              res))
         ; If the var isn't here, we drop the var and execute the expr
         (0 (let ((res (compile-expr-all `(cons (drop ,var) ,expr)))) (new-var var) res))
-        ; then, the var is here multiple time, we first execute the expr and after only drop the var
-        (_ (compile-expr-all (cons* `(
-                                      (define tmp-var-modify ,expr)
-                                      (drop ,var)
-                                      (define ,var (destroy tmp-var-modify))))))))
+        ; then, the var is here multiple time
+        (_ (append
+            ; the first use of this variable is destroyed
+            (compile-expr-all `(cons
+                               (define tmp-var-modify ,(replace-var-by-destroy-once expr var))
+                               (define ,var (destroy tmp-var-modify))))
+            ; we use the variable a lot, and destroy it after
+            (compile-expr-all (cons* `(
+                                       (define tmp-var-modify ,expr)
+                                       (drop var)
+                                       (define ,var (destroy tmp-var-modify)))))
+            ; same but copy the variable at the top first
+            (compile-expr-all (cons* `(
+                                       (roll var)
+                                       (define tmp-var-modify ,expr)
+                                       (drop var)
+                                       (define ,var (destroy tmp-var-modify)))))))))
      ; copy
      ((list 'copy var) #:when (and (symbol? var) (member var stack))
                        (list (compile-var var)))
@@ -342,46 +364,50 @@
          myfalse
          (list "OP_ENDIF"))))
      ; cons
-     ((list 'cons a b) (for/list ((aa (compile-expr-all a))
-                                  (bb (compile-expr-all b)))
-                         (append aa bb)))
+     ((list 'cons a b) (for*/list ((aa (compile-expr-all a))
+                                   (bb (compile-expr-all b)))
+                         (begin ;(displayln a) (displayln bb) (displayln "-")
+                                (append aa bb))))
      ; debug
      ('debug (begin (println (format "STAAAAAAAAACK: ~a" stack)) '(())))
      ; ignore
      ((list 'ignore a) '(()))
-     ; reste
-     (e (list (list e))))))
+     ; asm
+     (e #:when (string? e) (list (list e)))
+     ; nil
+     (e '()))))
    ;(printf "FINN. Expr: ~a Stack: ~a~n" e stack)
   res)))
 
 (define (toLEUnsigned n l)
   (define l++ `(+ ,l 1))
   (if (number? l) (set! l++ (+ l 1)) '())
-  (car (compile-expr-all (cons* `((define tmp-m (call num2bin (,n ,l++)))
-                                  (define taille-tmp-m (call getLen (tmp-m)))
-                                  (bytes-get-first (destroy tmp-m) (- (destroy taille-tmp-m) 1)))))))
+  (compile-expr-all (cons* `((define tmp-m (call num2bin (,n ,l++)))
+                             (define taille-tmp-m (call getLen (tmp-m)))
+                             (bytes-get-first (destroy tmp-m) (- (destroy taille-tmp-m) 1))))))
+
 (define (fromLEUnsigned bytes)
-  (append (car (compile-expr-all `(+bytes ,bytes "00"))) (list "OP_BIN2NUM")))
+  (map (lambda (a) (append a '("OP_BIN2NUM"))) (compile-expr-all `(+bytes ,bytes "00"))))
 
 (define (readVarint tx)
   ; il y avait un freeze-stack
-  (car (compile-expr-all
-                    `(cons (define tx ,tx)
-                           (cons (define header (bytes-get-first tx 1))
-                                 (if (= header "fd")
-                                     (cons (define l (call fromLEUnsigned (bytes-delete-first (bytes-get-first tx 3) 1)))
-                                           (cons (drop header)
-                                                 (bytes-get-first (bytes-delete-first (destroy tx) 3) (destroy l))))
-                                     (if (= header "fe")
-                                         (cons (define l (call fromLEUnsigned (bytes-delete-first (bytes-get-first tx 5) 1)))
-                                               (cons (bytes-get-first (bytes-delete-first (destroy tx) 5) (destroy l))
-                                                     (drop header)))
-                                         (if (= header "ff")
-                                             (cons (define l (call fromLEUnsigned (bytes-delete-first (bytes-get-first tx 9) 1)))
-                                                   (cons (bytes-get-first (bytes-delete-first (destroy tx) 9) (destroy l))
-                                                         (drop header)))
-                                             (cons (define l (call fromLEUnsigned (destroy header)))
-                                                   (bytes-get-first (bytes-delete-first (destroy tx) 1) (destroy l)))))))))))
+  (compile-expr-all
+   `(cons (define tx ,tx)
+          (cons (define header (bytes-get-first tx 1))
+                (if (= header "fd")
+                    (cons (define l (call fromLEUnsigned ((bytes-delete-first (bytes-get-first tx 3) 1))))
+                          (cons (drop header)
+                                (bytes-get-first (bytes-delete-first (destroy tx) 3) (destroy l))))
+                    (if (= header "fe")
+                        (cons (define l (call fromLEUnsigned ((bytes-delete-first (bytes-get-first tx 5) 1))))
+                              (cons (bytes-get-first (bytes-delete-first (destroy tx) 5) (destroy l))
+                                    (drop header)))
+                        (if (= header "ff")
+                            (cons (define l (call fromLEUnsigned ((bytes-delete-first (bytes-get-first tx 9) 1))))
+                                  (cons (bytes-get-first (bytes-delete-first (destroy tx) 9) (destroy l))
+                                        (drop header)))
+                            (cons (define l (call fromLEUnsigned ((destroy header))))
+                                  (bytes-get-first (bytes-delete-first (destroy tx) 1) (destroy l))))))))))
 
 (define (readVarint-compile-small tx)
   (begin
@@ -389,22 +415,22 @@
     (compile-expr-all
      `(cons (define tx ,tx)
             (cons (define header (bytes-get-first tx 1))
-                  (cons (define l (call fromLEUnsigned (destroy header)))
+                  (cons (define l (call fromLEUnsigned ((destroy header))))
                         (bytes-get-first (bytes-delete-first (destroy tx) 1) (destroy l))))))))
 
 ; https://learnmeabitcoin.com/technical/varint
 (define (writeVarint tx)
-  (car (compile-expr-all
-        `(cons (define txici ,tx)
-               (cons (define n (call getLen (txici)))
-                     (if (<= n "fc00")
-                         (+bytes (call toLEUnsigned ((destroy n) 1)) (destroy txici))
-                         (if (<= n "ffff00")
-                             (+bytes (+bytes "fd" (call toLEUnsigned ((destroy n) 2))) (destroy txici))
-                             (if (<= n "ffffffff00")
-                                 (+bytes (+bytes "fe" (call toLEUnsigned ((destroy n) 4))) (destroy txici))
-                                 (+bytes (+bytes "ff" (call toLEUnsigned ((destroy n) 8))) (destroy txici))
-                         ))))))))
+  (compile-expr-all
+   `(cons (define txici ,tx)
+          (cons (define n (call getLen (txici)))
+                (if (<= n "fc00")
+                    (+bytes (call toLEUnsigned ((destroy n) 1)) (destroy txici))
+                    (if (<= n "ffff00")
+                        (+bytes (+bytes "fd" (call toLEUnsigned ((destroy n) 2))) (destroy txici))
+                        (if (<= n "ffffffff00")
+                            (+bytes (+bytes "fe" (call toLEUnsigned ((destroy n) 4))) (destroy txici))
+                            (+bytes (+bytes "ff" (call toLEUnsigned ((destroy n) 8))) (destroy txici))
+                            )))))))
 
 (define (writeVarint-compile-small tx)
   (compile-expr-all
@@ -414,31 +440,33 @@
 
 (define (getScriptCode tx)
   ;(car (compile-expr-all `(call readVarint-compile-small (bytes-delete-first ,(car tx) 104)))))
-  (car (compile-expr-all `(call readVarint (bytes-delete-first ,(car tx) 104)))))
+  (compile-expr-all `(call readVarint (bytes-delete-first ,(car tx) 104))))
 
 (define (getScriptCode-with-header tx)
-  (car (compile-expr-all `(bytes-get-first (bytes-delete-first ,(car tx) 104) "s1"))))
+  (compile-expr-all `(bytes-get-first (bytes-delete-first ,(car tx) 104) "s1")))
 
 (define (buildOutput args)
   ;(car (compile-expr-all `(+bytes ,(second args) (call writeVarint-compile-small (,(first args)))))))
-  (car (compile-expr-all `(+bytes ,(second args) (call writeVarint (,(first args)))))))
+  (compile-expr-all `(+bytes ,(second args) (call writeVarint (,(first args))))))
 
 (define (buildOutput-with-header args)
-  (car (compile-expr-all `(+bytes ,(second args) ,(first args)))))
+  (compile-expr-all `(+bytes ,(second args) ,(first args))))
 
 (define (hashOutputs args)
-  (car (compile-expr-all `(cons (define abc ,(car args))
-                                (bytes-get-last (bytes-delete-last (destroy abc) 8) 32)))))
+  (compile-expr-all `(cons (define abc ,(car args))
+                                (bytes-get-last (bytes-delete-last (destroy abc) 8) 32))))
 
-(define (call-call function args)
+(define/contract (call-call function args)
+  (-> symbol? list? (lambda (elem) (and (list? elem) (list? (first elem)))))
+  ;(displayln function) (displayln args)
   (match function
-    ('getLen (map (lambda (a) (append a (list '("OP_SIZE OP_NIP")))) (compile-expr-all (car args))))
-    ('not (map (lambda (a) (append a (list "OP_NOT"))) (compile-expr-all (car args))))
-    ('invert (map (lambda (a) (append a (list "OP_INVERT"))) (compile-expr-all (car args))))
+    ('getLen (map (lambda (a) (append a '("OP_SIZE" "OP_NIP"))) (compile-expr-all (car args))))
+    ('not (map (lambda (a) (append a '("OP_NOT"))) (compile-expr-all (car args))))
+    ('invert (map (lambda (a) (append a '("OP_INVERT"))) (compile-expr-all (car args))))
     ('getScriptCode (getScriptCode args))
     ('getScriptCode-with-header (getScriptCode-with-header args))
     ('buildOutput (buildOutput args))
-    ('buildOutputP2PKH (buildOutput (list (list "OP_DUP OP_HASH160" "14" (first args) "OP_EQUALVERIFY" "OP_CHECKSIG") (second args)))) ; todo à tester (surement faux)
+    ('buildOutputP2PKH (buildOutput (list `("OP_DUP" "OP_HASH160" "14" ,(first args) "OP_EQUALVERIFY" "OP_CHECKSIG") (second args)))) ; todo à tester (surement faux)
     ('buildOutput-with-header (buildOutput-with-header args))
     ;('buildOutput (list '("arg + call buildOutput")))
     ('hashOutputs (hashOutputs args))
@@ -447,27 +475,29 @@
     ('readVarint-compile-small (readVarint-compile-small args))
     ('writeVarint (writeVarint (car args)))
     ('writeVarint-compile-small (writeVarint-compile-small (car args)))
-    ('fromLEUnsigned (fromLEUnsigned args))
+    ('fromLEUnsigned (fromLEUnsigned (car args)))
     ('toLEUnsigned (toLEUnsigned (first args) (second args)))
-    ('bin2num (map (lambda (a) (append a (list '("OP_BIN2NUM")))) (compile-expr-all (car args))))
-    ('num2bin (let ((f (car (compile-expr-all (first args)))))
+    ('bin2num (map (lambda (a) (append a '("OP_BIN2NUM"))) (compile-expr-all (car args))))
+    ('num2bin (let ((all-f (compile-expr-all (first args))))
                 (push-stack)
-                (let ((s (car (compile-expr-all (second args)))))
+                (let ((all-s (compile-expr-all (second args))))
                   (drop-stack)
-                  (append
-                   f
-                   s
-                   (list '("OP_NUM2BIN"))))))
-    ('checksigverify (let ((f (car (compile-expr-all (first args)))))
+                  (for*/list ((f all-f) (s all-s))
+                    (append
+                     f
+                     s
+                     '("OP_NUM2BIN"))))))
+    ('checksigverify (let ((all-f (compile-expr-all (first args))))
                        (push-stack)
-                       (let ((s (car (compile-expr-all (second args)))))
+                       (let ((all-s (compile-expr-all (second args))))
                          (drop-stack)
-                         (append
-                          f
-                          s
-                          (list '("OP_CHECKSIGVERIFY"))))))
-    ('hash256 (map (lambda (a) (append a (list '("OP_HASH256")))) (compile-expr-all (car args))))
-    ('sha256 (map (lambda (a) (append a (list '("OP_SHA256")))) (compile-expr-all (car args))))
+                         (for*/list ((f all-f) (s all-s))
+                           (append
+                            f
+                            s
+                            '("OP_CHECKSIGVERIFY"))))))
+    ('hash256 (map (lambda (a) (append a '("OP_HASH256"))) (compile-expr-all (car args))))
+    ('sha256 (map (lambda (a) (append a '("OP_SHA256"))) (compile-expr-all (car args))))
     ; hashmap
     ; value et hint sont deux hints, donc pas besoin de faire tout ce bordel
     ; en fait pas besoin parcequ'on peut pas appeler avec value et hint qui valent des destroy ; todo etre sur qu'on peut pas
