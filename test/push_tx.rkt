@@ -50,5 +50,5 @@
     '() (exit 1))
 (if (string=?
      (contract->opcodes (append '(public (tx-arg)) lispcoded))
-     (contract->opcodes (append '(public (tx-arg)) handcoded)))
+     (contract->opcodes (append '(public ()) handcoded)))
     '() (exit 1))
