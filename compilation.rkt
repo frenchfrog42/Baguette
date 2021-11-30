@@ -632,6 +632,7 @@
               (set! compile-function compile-function-simple))
             '())
         (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all c)))) ; ir->opcodes and naive opt
+        (set! allcomp (map (lambda (a) (if (string=? (substring a 0 2) "||") (~a "this-function-has-no-args(çatodo) " a) a)) allcomp))
         (if is-public-function
             (let ()
               (printf (~a "You are compiling a public function, with" (if keep-args-order "out changing the order of your args" " any order of arguments") "\n"))

@@ -50,8 +50,10 @@
   ; On veut la transformer en:                     liste-state | index | arguments de la fonction
   ; C'est l'étape de vérification de liste-state
 
-  ; On récupère dans le state de la transaction la concatenation hashée de tous les éléments
+  ; On pushtx, et on récupère dans le state de la transaction la concatenation hashée de tous les éléments
   (set-stack '(tx-arg))
+  ; push tx
+  (set! reponse (append reponse (first (compile-expr-all '(call pushtx (tx-arg))))))
   (set! reponse (append reponse (car (compile-expr-all (cons* `(
                                                                 (define scriptCode (call getScriptCode ((destroy tx-arg))))
                                                                 (bytes-get-last (destroy scriptCode) 32))))))) ; la liste concaténé des éléments du state

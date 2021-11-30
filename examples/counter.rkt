@@ -49,7 +49,7 @@
 (define compteur-state (vyper-create-final '(compteur)
                                             '((public () (modify compteur (+ 1 compteur))))))
 
-(contract->opcodes compteur-state) ; Fonctionne. 313 bytes
+(contract->opcodes (append '(public) '(()) compteur-state)) ; Fonctionne. 313 bytes
 
 
 
