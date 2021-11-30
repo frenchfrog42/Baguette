@@ -43,7 +43,6 @@
                     (call checksigverify ((destroy signature) (destroy pubkey)))))
 
 ; todo faire un appel a pushtx
-
 (if (string=?
      (contract->opcodes (append '(public (tx-arg)) lispcoded-no-modify))
      (contract->opcodes (append '(public (tx-arg)) lispcoded)))
@@ -52,3 +51,15 @@
      (contract->opcodes (append '(public (tx-arg)) lispcoded))
      (contract->opcodes (append '(public ()) handcoded)))
     '() (exit 1))
+
+; Pushtx doesn't modify stack
+(begin
+  (set-stack '(tx-arg))
+  (compile-expr-all '(call pushtx-no-modify (tx-arg)))
+  (displayln stack)
+  (if (> (length stack) 1) (exit 1) '()))
+(begin
+  (set-stack '(tx-arg))
+  (compile-expr-all '(call pushtx (tx-arg)))
+  (displayln stack)
+  (if (> (length stack) 1) (exit 1) '()))

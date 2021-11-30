@@ -364,10 +364,12 @@
          myfalse
          (list "OP_ENDIF"))))
      ; cons
-     ((list 'cons a b) (for*/list ((aa (compile-expr-all a))
-                                   (bb (compile-expr-all b)))
+     ((list 'cons a b) (let* ((all-a (compile-expr-all a))
+                              (all-b (compile-expr-all b)))
+                         (for*/list ((aa all-a)
+                                     (bb all-b))
                          (begin ;(displayln a) (displayln bb) (displayln "-")
-                                (append aa bb))))
+                                (append aa bb)))))
      ; debug
      ('debug (begin (println (format "STAAAAAAAAACK: ~a" stack)) '(())))
      ; ignore
