@@ -10,7 +10,7 @@
 ;(require "test.rkt")
 
 (define-tokens value-tokens (NUM VAR FNCT))
-(define-empty-tokens op-tokens (newline = OP CP + - * / ^ EOF NEG CREATE PUBLIC REQUIRE VIRGULE POINTVIRGULE OCROCHET CCROCHET FREE +BYTES DESTROY CHECKEQUAL STATE CONTRACT INT32 PAY))
+(define-empty-tokens op-tokens (newline = OP CP + - * / ^ EOF NEG CREATE FUNCTION REQUIRE VIRGULE POINTVIRGULE OCROCHET CCROCHET FREE +BYTES DESTROY CHECKEQUAL STATE CONTRACT INT32 PAY))
 
 ;; A hash table to store variable values in for the calculator
 (define vars (make-hash))
@@ -37,7 +37,7 @@
    [")" 'CP]
    ["create" 'CREATE]
    ["free" 'FREE]
-   ["public" 'PUBLIC]
+   ["function" 'FUNCTION]
    ["require" 'REQUIRE]
    ["," 'VIRGULE]
    [";" 'POINTVIRGULE]
@@ -121,16 +121,13 @@
            ;; and try to start ov(er right after the error
            [(error start) $2]
            [(STATE OCROCHET state CCROCHET CONTRACT OCROCHET listpublic CCROCHET)
-            `(begin (define table-tmp ',$3)
-                    ,$7)])
-
-    (type [(INT32) 4])
+            `(contract ,$3 ,$7)])
     
     (state [() '()]
-           [(type VAR POINTVIRGULE state) (append `((,$2 ,$1)) $4)])
+           [(VAR POINTVIRGULE state) (cons $1 $3)])
 
     (listpublic [() '()]
-                [(PUBLIC OP args CP OCROCHET body CCROCHET listpublic) (list (list 'test-solidity (list 'quote $3) $6) $8)])
+                [(FUNCTION OP args CP OCROCHET body CCROCHET listpublic) (cons `(public ,$3 ,$6) $8)])
 
     (args [() '()]
           [(VAR) (list $1)]
@@ -149,7 +146,7 @@
     (var-exp [(CREATE VAR) `(define ,$2 0)]
              [(CREATE VAR = exp) `(define ,$2 ,$4)]
              [(FREE VAR) `(drop ,$2)]
-             [(VAR = exp) `(cons (define tmp ,$3) (cons (drop ,$1) (define ,$1 (destroy tmp))))])
+             [(VAR = exp) `(modify ,$1 ,$3)])
 
     (require-exp [(REQUIRE OP exp CP POINTVIRGULE) $3])
 
@@ -186,37 +183,14 @@
 
 (run
 "state {
- int32 a;
- int32 b;
+ a;
+ b;
 }
 contract {
- public () {
+ function () {
   a = a + 1;
-  pay(address, 8);
  }
- public() {
+ function () {
   b = b + 1;
  }
 }")
-
-;}")
-
-
-;(define compteur '(public (tx-arg amount-arg)
-;                          (define scriptCode (call getScriptCode (tx-arg)))
-;                          (define counter (call bin2num (bytes-get-last scriptCode 1)))
-;                          (define scriptCode_ (+bytes (bytes-delete-last (destroy scriptCode) 1) (+ 1 (destroy counter))))
-;                          (define newAmount (call num2bin ((destroy amount-arg) 8)))
-;                          (define output (call buildOutput ((destroy scriptCode_) (destroy newAmount))))
-;                          (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-arg))))
-;                    ))
-;(define compteur 'public (tx-arg amount-arg)
-;                          (define scriptCode (call getScriptCode (tx-arg)))
-;                          (define counter (call bin2num ((call bytes-get-last (scriptCode 1)))))
-;                          (define scriptCode_ (+bytes (call bytes-delete-last ((destroy scriptCode) 1)) (+ (destroy counter) 1)))
-;                          (define newAmount (call num2bin ((destroy amount-arg) 8)))
-;                          (define output (call buildOutput ((destroy scriptCode_) (destroy newAmount))))
-;                          (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx-args)))))
-
- ; (module+ main
- ;(calc (current-input-port)))
