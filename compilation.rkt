@@ -129,6 +129,7 @@
                           ; opcodes that are a shortcort for another
                           (#rx"OP_1 OP_ADD" "OP_1ADD")
                           (#rx"OP_1 OP_SUB" "OP_1SUB")
+                          (#rx"OP_DROP OP_DROP" "OP_2DROP")
                           ; commutative op
                           (#rx"OP_SWAP OP_ADD" "OP_ADD")
                           (#rx"OP_SWAP OP_MUL" "OP_MUL")
@@ -352,17 +353,27 @@
       (define all-expr (compile-expr-all l))
       (for/list ((e all-expr)) (append e (list "OP_VERIFY"))))
      ; if ; todo
+     ((list 'if cond true)
+      (let* ((mycond (compile-expr-all cond))
+             (mytrue (compile-expr-all true)))
+        (for*/list ((c mycond) (t mytrue))
+          (append
+           c
+           (list "OP_IF")
+           t
+           (list "OP_ENDIF")))))
      ((list 'if cond true false)
-      (for/list ((mycond (compile-expr-all cond))
-            (mytrue (save-stack (compile-expr-all true)))
-            (myfalse (compile-expr-all false)))
-        (append
-         mycond
-         (list "OP_IF")
-         mytrue
-         (list "OP_ELSE")
-         myfalse
-         (list "OP_ENDIF"))))
+      (let* ((mycond (compile-expr-all cond))
+             (mytrue (save-stack (compile-expr-all true)))
+             (myfalse (compile-expr-all false)))
+        (for*/list ((c mycond) (t mytrue) (f myfalse))
+          (append
+           c
+           (list "OP_IF")
+           t
+           (list "OP_ELSE")
+           f
+           (list "OP_ENDIF")))))
      ; cons
      ((list 'cons a b) (let* ((all-a (compile-expr-all a))
                               (all-b (compile-expr-all b)))
@@ -740,6 +751,10 @@
   (match code
     ((list 'define var reste) (begin (collect-list-define reste) `(,var))) ;define cannot be included in each others, but destroy can
     ((list 'destroy var) (error "Use of destroyed variable in garbage collected function"))
+    ; manually collect memory in ifs
+    ((list 'if c t) '())
+    ((list 'if c t f) '())
+    ; recursion
     ((cons a b) (append (collect-list-define a) (collect-list-define b)))
     (_ '())))
 
@@ -756,7 +771,7 @@
   (drop-all code
             ;A priori les define les plus récents seront au top, et il faut les supprimer en 1er. Todo faire un truc plus opti ?
             ;(second code) is the list of arguments of the public function
-            (append (reverse (collect-list-define code)) (second code))
+            (append (reverse (collect-list-define code)) (reverse (second code)))
             is-public-function))
 
     
