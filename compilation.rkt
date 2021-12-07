@@ -300,6 +300,7 @@
      ((list 'call nom args) (call-call nom args)) ; todo remplacer et mettre juste "(call-call nom args)" et voir si ça casse rien
      ; define
      ((list 'define var expr) (let ((res (compile-expr-all expr))) (new-var var) res)) ; todo
+     ((list 'unsafe-define var) (begin (new-var var) '(())))
      ;((list 'push-var var) (new-var var) res)) ; todo make a expression to push a var to the stack when we write assembly
      ; binary expression
      ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
@@ -414,7 +415,6 @@
 
 ; idem
 (define (readVarint tx)
-  ; il y avait un freeze-stack
   (compile-expr-all
    `(cons (define tx ,tx)
           (cons (define header (bytes-get-first tx 1))
@@ -432,6 +432,29 @@
                                         (drop header)))
                             (cons (define l (call fromLEUnsigned ((destroy header))))
                                   (bytes-get-first (bytes-delete-first (destroy tx) 1) (destroy l))))))))))
+(define (newReadVarint tx)
+  (compile-expr-all
+   (cons* `(
+            (define tx ,tx)
+            (define header (bytes-get-first tx 1))
+            (if (<= "fc" (call bin2num (header)))
+                (cons (define arg 1)
+                      (destroy header))
+                ,(cons* `(
+                          (if (= header "fd") 3
+                              (if (= header "fe") 5
+                                  ;(if (= header "ff") ;cant be in any other case ?
+                                      9));)
+                          (unsafe-define arg)
+                          (drop header)
+                          (bytes-delete-first (bytes-get-first tx arg) 1) ;([] tx 1 arg)
+                          ))
+                )
+            "00 OP_CAT OP_BIN2NUM" ;fromLEUnsigned ;todo
+            (unsafe-define l)
+            (bytes-get-first (bytes-delete-first (destroy tx) (destroy arg)) (destroy l))))))
+
+(set! readVarint newReadVarint)
 
 (define (readVarint-compile-small tx)
   (begin
