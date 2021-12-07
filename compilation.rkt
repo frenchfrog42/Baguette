@@ -304,6 +304,16 @@
      ; binary expression
      ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
      ((cons op reste) #:when (binary-op? op) (compile-binary-op-all-no-commute (compile-op op) reste))
+     ; bytes[a:b]
+     ((list '[] bytes a b) #:when (and (number? a) (number? b))
+                           (list
+                            `(,(compile-int a) "OP_SPLIT"                  ;stack: [a:] [:a]
+                                               ,(compile-int b) "OP_SPLIT" ;stack: [a+b:] [a:b] [:a]
+                                               "OP_ROT" "OP_2DROP")))      ;stack: [a:b]
+     ;((list 'bytes-extract bytes a b) (append
+     ;                                  (compile-expr-all `(bytes-get-first (bytes-delete-first ,a ,bytes) (- ,b ,a)))
+     ;                                  (compile-expr-all `(bytes-delete-first (bytes-get-first (+ ,a ,b) ,bytes) ,a))
+     ;                                  ));todo
      ; var
      (var #:when (and (symbol? var) (member var stack))
           (list (compile-var var)))
@@ -402,6 +412,7 @@
 (define (fromLEUnsigned bytes)
   (map (lambda (a) (append a '("OP_BIN2NUM"))) (compile-expr-all `(+bytes ,bytes "00"))))
 
+; idem
 (define (readVarint tx)
   ; il y avait un freeze-stack
   (compile-expr-all
@@ -432,6 +443,7 @@
                         (bytes-get-first (bytes-delete-first (destroy tx) 1) (destroy l))))))))
 
 ; https://learnmeabitcoin.com/technical/varint
+;todo optimiser ce call
 (define (writeVarint tx)
   (compile-expr-all
    `(cons (define txici ,tx)
@@ -444,6 +456,24 @@
                             (+bytes (+bytes "fe" (call toLEUnsigned ((destroy n) 4))) (destroy txici))
                             (+bytes (+bytes "ff" (call toLEUnsigned ((destroy n) 8))) (destroy txici))
                             )))))))
+(define (newWriteVarint tx)
+  (compile-expr-all
+   (cons* `(
+            (define txici ,tx)
+            (define n (call getLen (txici)))
+            (if (<= n "fc00")
+                (+bytes (call toLEUnsigned ((destroy n) 1)) (destroy txici))
+                ,(cons* `(
+                          (define prefixe "ff")
+                          (define taille 8)
+                          (if (<= n "ffff00")
+                              "OP_2DROP fd OP_2"
+                              (if (<= n "ffffffff00")
+                                  "OP_2DROP fe OP_4"
+                                  ))
+                          (+bytes (+bytes (destroy prefixe) (call toLEUnsigned ((destroy n) (destroy taille)))) (destroy txici)))))))))
+
+(set! writeVarint newWriteVarint)
 
 (define (writeVarint-compile-small tx)
   (compile-expr-all
