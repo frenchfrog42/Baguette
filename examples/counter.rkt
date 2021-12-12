@@ -12,7 +12,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define compteur '(public (tx-arg amount-arg)
-                          (call pushtx-assembly (tx-arg))
+                          (call pushtx (tx-arg))
                           (define scriptCode (call getScriptCode (tx-arg)))
                           (define counter (call bin2num ((bytes-get-last scriptCode 1))))
                           (define scriptCode_ (+bytes (bytes-delete-last (destroy scriptCode) 1) (+ 1 (destroy counter))))

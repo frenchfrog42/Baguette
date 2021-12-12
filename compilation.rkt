@@ -6,6 +6,8 @@
 (define stack '())
 ; if the compilation is approx (if we create stack var out of thin air)
 (define approx #f)
+; optimisation on ?
+(define opt? #t)
 
 (define (set-approx val)
   (set! approx val))
@@ -306,7 +308,7 @@
      ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
      ((cons op reste) #:when (binary-op? op) (compile-binary-op-all-no-commute (compile-op op) reste))
      ; bytes[a:b]
-     ((list '[] bytes a b) #:when (and (number? a) (number? b))
+     ((list '[] bytes a b) #:when (and (number? a) (number? b) (positive? a) (positive? b))
                            (list
                             `(,(compile-int a) "OP_SPLIT"                  ;stack: [a:] [:a]
                                                ,(compile-int b) "OP_SPLIT" ;stack: [a+b:] [a:b] [:a]
@@ -454,7 +456,7 @@
             (unsafe-define l)
             (bytes-get-first (bytes-delete-first (destroy tx) (destroy arg)) (destroy l))))))
 
-(set! readVarint newReadVarint)
+(if opt? (set! readVarint newReadVarint) '())
 
 (define (readVarint-compile-small tx)
   (begin
@@ -495,8 +497,24 @@
                                   "OP_2DROP fe OP_4"
                                   ))
                           (+bytes (+bytes (destroy prefixe) (call toLEUnsigned ((destroy n) (destroy taille)))) (destroy txici)))))))))
+; -12 bytes
+(define (newWriteVarint2 tx)
+  (compile-expr-all
+   (cons* `(
+            (define txici ,tx)
+            (define n (call getLen (txici)))
+            (if (<= n "fc00")
+                "OP_1 OP_0"
+                (if (<= n "ffff00")
+                    "OP_2 fd"
+                    (if (<= n "ffffffff00")
+                        "OP_4 fe"
+                        "OP_8 ff")))
+            (unsafe-define taille)
+            (unsafe-define prefixe)
+            (+bytes (+bytes (destroy prefixe) (call toLEUnsigned ((destroy n) (destroy taille)))) (destroy txici))))))
 
-(set! writeVarint newWriteVarint)
+(if opt? (set! writeVarint newWriteVarint2) '())
 
 (define (writeVarint-compile-small tx)
   (compile-expr-all
@@ -521,6 +539,9 @@
 (define (hashOutputs args)
   (compile-expr-all `(cons (define abc ,(car args))
                                 (bytes-get-last (bytes-delete-last (destroy abc) 8) 32))))
+(define (hashOutputs2 args)
+  (compile-expr-all `(bytes-delete-first (bytes-get-last ,(car args) 40) 8)))
+(if opt? (set! hashOutputs hashOutputs2) '())
 
 (define/contract (call-call function args)
   (-> symbol? list? (lambda (elem) (and (list? elem) (list? (first elem)))))
