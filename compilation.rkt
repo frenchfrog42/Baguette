@@ -132,6 +132,11 @@
                           (#rx"OP_1 OP_ADD" "OP_1ADD")
                           (#rx"OP_1 OP_SUB" "OP_1SUB")
                           (#rx"OP_DROP OP_DROP" "OP_2DROP")
+                          (#rx"OP_OVER OP_OVER" "OP_2DUP")
+                          ;(#rx"OP_2 OP_PICK OP_2 OP_PICK OP_2 OP_PICK" "OP_3DUP") ;todo checker
+                          ;(#rx"OP_3 OP_PICK OP_3 OP_PICK" "OP_2OVER") ;todo checker
+                          ;(#rx"OP_5 OP_ROLL OP_5 OP_ROLL" "OP_2ROT") ;todo checker
+                          ;(#rx"OP_3 OP_ROLL OP_3 OP_ROLL" "OP_2SWAP") ;todo checker
                           ; commutative op
                           (#rx"OP_SWAP OP_ADD" "OP_ADD")
                           (#rx"OP_SWAP OP_MUL" "OP_MUL")
@@ -303,9 +308,11 @@
      ; define
      ((list 'define var expr) (let ((res (compile-expr-all expr))) (new-var var) res)) ; todo
      ((list 'unsafe-define var) (begin (new-var var) '(())))
+     ((list 'unsafe-drop var) (begin (delete-var var) '(())))
      ;((list 'push-var var) (new-var var) res)) ; todo make a expression to push a var to the stack when we write assembly
      ; binary expression
      ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
+     ((cons op reste) #:when (and opt? (or (eq? op 'bytes-get-last) (eq? op 'bytes-delete-last))) (compile-expr-all (list 'call op reste)))
      ((cons op reste) #:when (binary-op? op) (compile-binary-op-all-no-commute (compile-op op) reste))
      ; bytes[a:b]
      ((list '[] bytes a b) #:when (and (number? a) (number? b) (positive? a) (positive? b))
@@ -541,13 +548,34 @@
                                 (bytes-get-last (bytes-delete-last (destroy abc) 8) 32))))
 (define (hashOutputs2 args)
   (compile-expr-all `(bytes-delete-first (bytes-get-last ,(car args) 40) 8)))
-(if opt? (set! hashOutputs hashOutputs2) '())
+;(if opt? (set! hashOutputs hashOutputs2) '()) ;todo rewrite this. It's wrong, 100%
+
+(define (bytes-get-last bytes n)
+  (compile-expr-all (cons* `(
+                             (define b ,bytes)
+                             (define size (call getLen (b)))
+                             (define n (- (destroy size) ,n))
+                             "OP_SPLIT"
+                             "OP_NIP"
+                             (unsafe-drop n)
+                             (unsafe-drop b)
+                             ))))
+(define (bytes-delete-last bytes n)
+  (compile-expr-all (cons* `(
+                             (define b ,bytes)
+                             (define size (call getLen (b)))
+                             (define n (- (destroy size) ,n))
+                             "OP_SPLIT"
+                             "OP_DROP"
+                             (unsafe-drop n)
+                             (unsafe-drop b)
+                             ))))
 
 (define/contract (call-call function args)
   (-> symbol? list? (lambda (elem) (and (list? elem) (list? (first elem)))))
   ;(displayln function) (displayln args)
   (match function
-    ('getLen (map (lambda (a) (append a '("OP_SIZE" "OP_NIP"))) (compile-expr-all (car args))))
+    ('getLen (if (eq? (first args) (first stack)) '(("OP_SIZE")) (map (lambda (a) (append a '("OP_SIZE" "OP_NIP"))) (compile-expr-all (car args)))))
     ('not (map (lambda (a) (append a '("OP_NOT"))) (compile-expr-all (car args))))
     ('invert (map (lambda (a) (append a '("OP_INVERT"))) (compile-expr-all (car args))))
     ('getScriptCode (getScriptCode args))
@@ -585,6 +613,8 @@
                             '("OP_CHECKSIGVERIFY"))))))
     ('hash256 (map (lambda (a) (append a '("OP_HASH256"))) (compile-expr-all (car args))))
     ('sha256 (map (lambda (a) (append a '("OP_SHA256"))) (compile-expr-all (car args))))
+    ('bytes-get-last (bytes-get-last (first args) (second args)))
+    ('bytes-delete-last (bytes-delete-last (first args) (second args)))
     ; hashmap
     ; value et hint sont deux hints, donc pas besoin de faire tout ce bordel
     ; en fait pas besoin parcequ'on peut pas appeler avec value et hint qui valent des destroy ; todo etre sur qu'on peut pas
