@@ -2,6 +2,16 @@
 
 (require "util.rkt")
 
+; je peux pas utiliser assetId direct, à cause du drop dans le if ?
+; unsafe define marche pas dans le if ?
+; j'ai pas de let
+; 163 faut que je push a300 pas a3
+
+; unsafe-define marche pas dans le profile
+; je peux pas dans dans le deuxieme cas du if
+
+; version where memory is collected manually
+
 ; stack used for the compilation
 (define stack '())
 ; if the compilation is approx (if we create stack var out of thin air)
@@ -133,6 +143,8 @@
                           (#rx"OP_1 OP_SUB" "OP_1SUB")
                           (#rx"OP_DROP OP_DROP" "OP_2DROP")
                           (#rx"OP_OVER OP_OVER" "OP_2DUP")
+                          (#rx"OP_NOT OP_IF" "OP_NOTIF")
+                          (#rx"OP_EQUAL OP_VERIFY" "OP_EQUALVERIFY")
                           ;(#rx"OP_2 OP_PICK OP_2 OP_PICK OP_2 OP_PICK" "OP_3DUP") ;todo checker
                           ;(#rx"OP_3 OP_PICK OP_3 OP_PICK" "OP_2OVER") ;todo checker
                           ;(#rx"OP_5 OP_ROLL OP_5 OP_ROLL" "OP_2ROT") ;todo checker
@@ -143,6 +155,8 @@
                           (#rx"OP_SWAP OP_AND" "OP_AND")
                           (#rx"OP_SWAP OP_OR" "OP_OR")
                           (#rx"OP_SWAP OP_XOR" "OP_XOF")
+                          ; weird
+                          (#rx"OP_ELSE OP_ENDIF" "OP_ENDIF")
                           ))
 (define (naive-opt-aux expr)
   (regexp-replaces expr liste-naive-opt))
@@ -318,7 +332,7 @@
      ((list '[] bytes a b) #:when (and (number? a) (number? b) (positive? a) (positive? b))
                            (list
                             `(,(compile-int a) "OP_SPLIT"                  ;stack: [a:] [:a]
-                                               ,(compile-int b) "OP_SPLIT" ;stack: [a+b:] [a:b] [:a]
+                                               ,(compile-int (+ a b)) "OP_SPLIT" ;stack: [a+b:] [a:b] [:a]
                                                "OP_ROT" "OP_2DROP")))      ;stack: [a:b]
      ;((list 'bytes-extract bytes a b) (append
      ;                                  (compile-expr-all `(bytes-get-first (bytes-delete-first ,a ,bytes) (- ,b ,a)))
@@ -533,6 +547,10 @@
   ;(car (compile-expr-all `(call readVarint-compile-small (bytes-delete-first ,(car tx) 104)))))
   (compile-expr-all `(call readVarint (bytes-delete-first ,(car tx) 104))))
 
+(define (getScriptCodeSmall tx)
+  ;(car (compile-expr-all `(call readVarint-compile-small (bytes-delete-first ,(car tx) 104)))))
+  (compile-expr-all `(call readVarint-compile-small (bytes-delete-first ,(car tx) 104))))
+
 (define (getScriptCode-with-header tx)
   (compile-expr-all `(bytes-get-first (bytes-delete-first ,(car tx) 104) "s1")))
 
@@ -579,6 +597,7 @@
     ('not (map (lambda (a) (append a '("OP_NOT"))) (compile-expr-all (car args))))
     ('invert (map (lambda (a) (append a '("OP_INVERT"))) (compile-expr-all (car args))))
     ('getScriptCode (getScriptCode args))
+    ('getScriptCodeSmall (getScriptCodeSmall args))
     ('getScriptCode-with-header (getScriptCode-with-header args))
     ('buildOutput (buildOutput args))
     ('buildOutputP2PKH (buildOutput (list `("OP_DUP" "OP_HASH160" "14" ,(first args) "OP_EQUALVERIFY" "OP_CHECKSIG") (second args)))) ; todo à tester (surement faux)
@@ -612,6 +631,7 @@
                             s
                             '("OP_CHECKSIGVERIFY"))))))
     ('hash256 (map (lambda (a) (append a '("OP_HASH256"))) (compile-expr-all (car args))))
+    ('hash160 (map (lambda (a) (append a '("OP_HASH160"))) (compile-expr-all (car args))))
     ('sha256 (map (lambda (a) (append a '("OP_SHA256"))) (compile-expr-all (car args))))
     ('bytes-get-last (bytes-get-last (first args) (second args)))
     ('bytes-delete-last (bytes-delete-last (first args) (second args)))
@@ -714,6 +734,22 @@
                                         (define signature (+bytes (destroy my-tx) (destroy sighashflags)))
                                         (define pubkey "02b405d7f0322a89d0f9f3a98e6f938fdc1c969a8d1382a2bf66a71ae74a1e83b0")
                                         (call checksigverify ((destroy signature) (destroy pubkey)))))))
+    ;checkpreimageopt_, compatible with scrypt
+    ('pushtx-assembly-scrypt (save-stack (begin
+                                    (push-stack)
+                                    (compile-expr-all (cons* `(
+                                                               "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817980220"
+                                                               (define tx-arg ,(car args))
+                                                               "OP_HASH256"
+                                                               "OP_1 OP_SPLIT OP_SWAP OP_BIN2NUM OP_1ADD OP_SWAP OP_CAT";"OP_1ADD"
+                                                               ;(modify my-tx-arg (+ 1 my-tx-arg)) ;should compile to 1ADD lmao OP_1 OP_OVER OP_ADD OP_SWAP OP_DROP
+                                                               "OP_CAT"
+                                                               "$Tx.checkPreimageOpt_.sigHashType" ;sighashflags
+                                                               "OP_CAT"
+                                                               "02b405d7f0322a89d0f9f3a98e6f938fdc1c969a8d1382a2bf66a71ae74a1e83b0"
+                                                               "OP_CHECKSIGVERIFY"
+                                                               ;(drop tx-arg) checksigverify already drops the argument
+                                                               ))))))
     ))
 
 ;(define (comp-save-all e) (save-stack (compile-expr-all e)))
@@ -793,18 +829,18 @@
   (printf "Sum of theses costs: ~a~n" (foldl + 0 (map opcodes->size list-best)))
   )
 
-(define (profile-function contract)
+(define (profile-function contract (reset-with-cons #f))
   (if (equal? (first contract) 'public) '() (error "please give a public function")) ; fail if a public function is not given
   (set! stack (second contract))
   (define code-contract (filter (lambda (a) (not (and (list? a) (equal? 'ignore (first a))))) (cddr contract)))
-  (recursive-profile-aux code-contract))
+  (recursive-profile-aux code-contract reset-with-cons))
 
-(define (recursive-profile-aux code (indent "") (father #f) (last-last-indent 0))
+(define (recursive-profile-aux code reset-with-cons (indent "") (father #f) (last-last-indent 0))
   ;(displayln code)
   ; code is a s-expr
   (define code-iter (if (and (list? code) (equal? 'call (first code))) (third code) code))
-  ; if we are a cons
-  (if (and (list? code) (equal? 'cons (first code))) (begin (set! indent "") (set! last-last-indent 0)) '())
+  ; if we are a cons and we reset with cons
+  (if (and reset-with-cons (list? code) (equal? 'cons (first code))) (begin (set! indent "") (set! last-last-indent 0)) '())
   (define list-of-sexpr (for/list ((e code-iter)
                                    #:when (and
                                            ; exclude atomic expression and ignore statements
@@ -814,7 +850,10 @@
                                            (not (and (list? e) (equal? 'ignore (first e))))))
                                    e))
   ; if it was a function call, the list of s-expr is the list of argument
-  (define list-each-expr (save-stack (for/list ((expr list-of-sexpr)) (map naive-opt (map ir->opcodes (compile-expr-all expr))))))
+  (define list-each-expr (if (eq? (first code) 'if)
+                             (for/list ((expr list-of-sexpr)) (map naive-opt (map ir->opcodes (save-stack (compile-expr-all expr)))))
+                             (save-stack (for/list ((expr list-of-sexpr)) (map naive-opt (map ir->opcodes (compile-expr-all expr)))))
+                             ))
   (define list-best (map (lambda (a) (argmin opcodes->size a)) list-each-expr))
   ;(displayln list-best)
   ;(printf "Result of the profiling (the orders of arguments may have been changed):~n")
@@ -835,12 +874,15 @@
               reverse-indent
               (make-string last-indent #\space)
               c)
-      (recursive-profile-aux c (~a indent "  ") (~a c) last-indent)))
+      (recursive-profile-aux c reset-with-cons (~a indent "  ") (~a c) last-indent)))
+  ;(displayln code) (displayln stack) (displayln (member (second code) stack)) (displayln (member (first code) '(define modify unsafe-define)))
   ; apply stack modification
-  (if (and (list? code) (member (first code) '(define destroy drop modify)))
-      (compile-expr-all (cons (first code) ;define/destroy/drop/modify
+  (if (and (list? code) (member (first code) '(define destroy drop modify unsafe-define unsafe-drop))
+           (or (member (first code) '(define modify unsafe-define)) (member (second code) stack))) ; dont if we do weird things with memory. Todo patch this
+      (compile-expr-all ;code)
+                        (cons (first code) ;define/destroy/drop/modify
                               (cons (second code) ;the var
-                                    (if (member (first code) '(drop destroy)) '() (list 0))))) ;a random argument for define/modify
+                                    (if (member (first code) '(drop destroy unsafe-drop unsafe-define)) '() (list 0))))) ;a random argument for define/modify. Otherwise no arg
       '())
   )
 
