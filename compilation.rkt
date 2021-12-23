@@ -26,7 +26,9 @@
   (if (integer? n)
       (if (< n 17)
           (list (~a "OP_" n))
-          (list (format "~a~a" (hex-int (quotient n 16)) (hex-int (remainder n 16)))))
+          (if (< n 128)
+              (list (format "~a~a" (hex-int (quotient n 16)) (hex-int (remainder n 16))))
+              (list (~a (hex-int (remainder (quotient n 16) 16)) (hex-int (remainder n 16)) 0 (hex-int (quotient n 256)))))) ;malaise
   "wtf")) ;wtf
 
 (define (to-opcode s)
@@ -157,6 +159,8 @@
                           (#rx"OP_SWAP OP_XOR" "OP_XOF")
                           ; weird
                           (#rx"OP_ELSE OP_ENDIF" "OP_ENDIF")
+                          ; hardcoded. Todo improve that
+                          (#rx"OP_ROT OP_SWAP OP_ROT" "OP_SWAP")
                           ))
 (define (naive-opt-aux expr)
   (regexp-replaces expr liste-naive-opt))
