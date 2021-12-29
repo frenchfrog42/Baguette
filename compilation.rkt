@@ -73,9 +73,9 @@
      (>> "OP_RSHIFT")
   ; )(rotate
      (bytes-get-first "OP_SPLIT drop0")
-     (bytes-get-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop1") ; todo
+     ;(bytes-get-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop1") ; todo
      (bytes-delete-first "OP_SPLIT drop1")
-     (bytes-delete-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop0") ; todo
+     ;(bytes-delete-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop0") ; todo
      (+bytes "OP_CAT")
 )))
 
@@ -156,7 +156,9 @@
                           (#rx"OP_SWAP OP_MUL" "OP_MUL")
                           (#rx"OP_SWAP OP_AND" "OP_AND")
                           (#rx"OP_SWAP OP_OR" "OP_OR")
-                          (#rx"OP_SWAP OP_XOR" "OP_XOF")
+                          (#rx"OP_SWAP OP_XOR" "OP_XOR")
+                          (#rx"OP_SWAP OP_EQUAL" "OP_EQUAL")
+                          (#rx"OP_SWAP OP_EQUALVERIFY" "OP_EQUALVERIFY")
                           ; weird
                           (#rx"OP_ELSE OP_ENDIF" "OP_ENDIF")
                           ; hardcoded. Todo improve that
@@ -316,6 +318,7 @@
 (define/contract (compile-expr-all e)
   (unconstrained-domain-> (lambda (elem) (and (list? elem) (or (empty? elem) (list? (first elem))))))
   (begin
+    ;(displayln e)
    ;(printf "Expr: ~a Stack: ~a~n" e stack)
    (let ((res 
    (match e
@@ -328,20 +331,24 @@
      ((list 'unsafe-define var) (begin (new-var var) '(())))
      ((list 'unsafe-drop var) (begin (delete-var var) '(())))
      ;((list 'push-var var) (new-var var) res)) ; todo make a expression to push a var to the stack when we write assembly
+     ; bytes operations
+     ((list 'bytes-get-first tx a) #:when (and (number? a) (negative? a)) (compile-expr-all `(bytes-get-last ,tx ,(- a))))
+     ((list 'bytes-delete-first tx a) #:when (and (number? a) (negative? a)) (compile-expr-all `(bytes-delete-last ,tx ,(- a))))
+     ((list 'bytes-get-last tx a) #:when (and (number? a) (negative? a)) (compile-expr-all `(bytes-get-first ,tx ,(- a))))
+     ((list 'bytes-delete-last tx a) #:when (and (number? a) (negative? a)) (compile-expr-all `(bytes-delete-first ,tx ,(- a))))
+     ((cons op reste) #:when (and opt? (or (eq? op 'bytes-get-last) (eq? op 'bytes-delete-last))) (compile-expr-all (list 'call op reste)))
      ; binary expression
      ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
-     ((cons op reste) #:when (and opt? (or (eq? op 'bytes-get-last) (eq? op 'bytes-delete-last))) (compile-expr-all (list 'call op reste)))
      ((cons op reste) #:when (binary-op? op) (compile-binary-op-all-no-commute (compile-op op) reste))
-     ; bytes[a:b]
-     ((list '[] bytes a b) #:when (and (number? a) (number? b) (positive? a) (positive? b))
-                           (list
-                            `(,(compile-int a) "OP_SPLIT"                  ;stack: [a:] [:a]
-                                               ,(compile-int (+ a b)) "OP_SPLIT" ;stack: [a+b:] [a:b] [:a]
-                                               "OP_ROT" "OP_2DROP")))      ;stack: [a:b]
-     ;((list 'bytes-extract bytes a b) (append
-     ;                                  (compile-expr-all `(bytes-get-first (bytes-delete-first ,a ,bytes) (- ,b ,a)))
-     ;                                  (compile-expr-all `(bytes-delete-first (bytes-get-first (+ ,a ,b) ,bytes) ,a))
-     ;                                  ));todo
+     ; bytes[a:b]. Todo
+     ((list 'bytes-extract bytes a b) (append
+                                       ;(compile-expr-all `(bytes-get-first (bytes-delete-first ,bytes ,a) ,(- b a)))
+                                       ;(compile-expr-all `(bytes-delete-first (bytes-get-first ,bytes ,(+ a b)) ,a))
+                                       (compile-expr-all `(bytes-delete-first (bytes-delete-last ,bytes ,b) ,a))
+                                       ;(compile-expr-all `(bytes-get-first (bytes-delete-first ,bytes ,a) ,(- b a)))
+                                       ;(if (negative? b)
+                                        ;   (compile-expr-all `(bytes-get-first (bytes-get-last ,bytes ,(- b)) ,(- a))) '())
+                                       ));todo
      ; var
      (var #:when (and (symbol? var) (member var stack))
           (list (compile-var var)))
@@ -390,6 +397,13 @@
      ((list 'verify l)
       (define all-expr (compile-expr-all l))
       (for/list ((e all-expr)) (append e (list "OP_VERIFY"))))
+     ; altstack
+     ((list 'to-altstack var) (compile-expr-all
+                            (cons* `(
+                                     (modify ,var ,var)
+                                     "OP_TOALTSTACK"
+                                     (unsafe-drop ,var)))))
+     ((list 'from-altstack var) (begin (new-var var) '(("OP_FROMALTSTACK"))))
      ; if ; todo
      ((list 'if cond true)
       (let* ((mycond (compile-expr-all cond))
@@ -412,13 +426,17 @@
            (list "OP_ELSE")
            f
            (list "OP_ENDIF")))))
-     ; cons
+     ; cons. With permutation
      ((list 'cons a b) (let* ((all-a (compile-expr-all a))
                               (all-b (compile-expr-all b)))
                          (for*/list ((aa all-a)
                                      (bb all-b))
-                         (begin ;(displayln a) (displayln bb) (displayln "-")
-                                (append aa bb)))))
+                                (append aa bb))))
+     ; cons*. No permutation. Todo
+     ;((list 'cons* code) #:when (> (length code) 1) (let* ((f (compile-expr-all (first code)))
+     ;                                                      (s (compile-expr-all (cons 'cons* (list (rest code))))))
+     ;                                                 (for/list ((a f) (b s)) (append a b))))
+     ;((list 'cons* expr) (compile-expr-all (first expr)))
      ; debug
      ('debug (begin (println (format "STAAAAAAAAACK: ~a" stack)) '(())))
      ; ignore
@@ -426,7 +444,7 @@
      ; asm
      (e #:when (string? e) (list (list e)))
      ; nil
-     (e '()))))
+     (e (error (~a "Expression " e " is not recognized, sorry~~"))))))
    ;(printf "FINN. Expr: ~a Stack: ~a~n" e stack)
   res)))
 
@@ -889,6 +907,7 @@
                                     (if (member (first code) '(drop destroy unsafe-drop unsafe-define)) '() (list 0))))) ;a random argument for define/modify. Otherwise no arg
       '())
   )
+  
 
 ; automatically drop variable
 (define (remove-destroy-variable code)

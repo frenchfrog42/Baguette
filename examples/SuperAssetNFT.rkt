@@ -40,45 +40,38 @@ $assetid $pubKeyHash OP_2 OP_PICK OP_HASH160 OP_SWAP OP_EQUALVERIFY OP_ROT OP_RO
 (define assetId "$assetid")
 (define pubKeyHash "$pubKeyHash")
 
+;(compile-function-simple (append '(public ()) (cons 'cons* (list (for/list ((e (in-range 100))) '(+ 1 2))))))
+
 (define (build-contract (size 100))
   `(public (txPreimage outputSatsWithSize receiveAddressWithSize isTransform senderSig unlockKey)
            (define this-assetId-tmp ,assetId)
            (define this-pubKeyHash ,pubKeyHash)
            (verify (= (call hash160 (unlockKey)) (destroy this-pubKeyHash)))
            (call checksigverify ((destroy senderSig) (destroy unlockKey)))
-
-           (modify isTransform isTransform)
-           "OP_TOALTSTACK"
-           (unsafe-drop isTransform)
+           
+           (to-altstack isTransform)
            
            (define this-assetId (destroy this-assetId-tmp))
-           ;(if (= this-assetId (call num2bin (0 36)))
-           (if (call not ((call bin2num (this-assetId)))) ;shoudl be equiv to before (it doesn't check this-assetId has size 36)
+           (if (call not ((call bin2num (this-assetId))))
                (cons (drop this-assetId)
                      (bytes-get-first (bytes-delete-first txPreimage 68) ,(- 104 68)))
                (destroy this-assetId))
            (unsafe-define tmp)
            (define accumulator ,(+bytes* `((destroy outputSatsWithSize) (destroy tmp) (destroy receiveAddressWithSize))))
 
-           ;(define elem (bytes-get-first (bytes-delete-first txPreimage 104) 1))
-           ;(modify elem (+bytes elem "00"))
-           ;(modify elem (call bin2num (elem)))
-           ;(modify elem (+ elem 105))
-           ;
-           ;(define elem ,(first (compile-int (+ 105 size))))
-           ;(bytes-delete-first (bytes-get-first txPreimage (destroy elem)) 163); [163:105+size]
            (bytes-get-first (bytes-delete-first txPreimage 163) ,(first (compile-int (- (+ 105 size) 163))))
            (unsafe-define tmp)
            (modify accumulator (+bytes accumulator (destroy tmp)))
            (define hash-accumulator (call hash256 ((destroy accumulator))))
-
            (modify txPreimage txPreimage)
-           "OP_FROMALTSTACK"
-           (unsafe-define isTransform)
+
+           (from-altstack isTransform)
+           
            (if (call not ((destroy isTransform)))
                (verify (=
                         hash-accumulator;(call hash256 (accumulator))
-                        (bytes-get-first (bytes-get-last txPreimage 40) 32))))
+                        (bytes-extract txPreimage -32 -40) ;(bytes-get-first (bytes-get-last txPreimage 40) 32)
+                        )))
            (call pushtx-assembly-scrypt ((destroy txPreimage)))
            ))
 
