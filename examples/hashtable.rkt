@@ -54,18 +54,47 @@
                                                        (define output (call buildOutput ((destroy newScriptCode) (destroy newAmount))))
                                                        (= (call hash256 ((destroy output))) (call hashOutputs ((destroy tx))))
                                                       ))
-                             ))
+                             ) #f)
 
-
-; ok
-(contract->opcodes (vyper-create-final
+(define cc (vyper-create-final
                     '(map)
-                    (with-hashmap '(
-                                    (public (key value) (verify (= (destroy value) (hashmap-lookup map (destroy key)))))
-                                    (public (key value) (modify map (hashmap-add map (destroy key) (destroy value))))
-                                    (public (key value) (modify map (hashmap-modify map (destroy key) (destroy value))))
-                                    (public (key) (modify map (hashmap-delete map (destroy key))))
-                                    ))))
+'((public (key value |(hashmap-lookup_map_(destroy_key))_00| |(hashmap-lookup_map_(destroy_key))_01|)
+          (verify
+           (=
+            (destroy value)
+            (cons
+             (ignore (add-hint 2 "(hashmap-lookup_map_(destroy_key))_0"))
+             (call hashmap-lookup (map (destroy key) |(hashmap-lookup_map_(destroy_key))_00| |(hashmap-lookup_map_(destroy_key))_01|)))))
+          (drop |(hashmap-lookup_map_(destroy_key))_00|)
+          (drop |(hashmap-lookup_map_(destroy_key))_01|))
+  (public (key value |(hashmap-add_map_(destroy_key)_(destroy_value))_00|)
+          (modify
+           map
+           (cons (ignore (add-hint 1 "(hashmap-add_map_(destroy_key)_(destroy_value))_0")) (call hashmap-add (map (destroy key) (destroy value) |(hashmap-add_map_(destroy_key)_(destroy_value))_00|))))
+          (drop |(hashmap-add_map_(destroy_key)_(destroy_value))_00|))
+  (public (key value |(hashmap-modify_map_(destroy_key)_(destroy_value))_00|)
+          (modify
+           map
+           (cons
+            (ignore (add-hint 1 "(hashmap-modify_map_(destroy_key)_(destroy_value))_0"))
+            (call hashmap-modify (map (destroy key) (destroy value) |(hashmap-modify_map_(destroy_key)_(destroy_value))_00|))))
+          (drop |(hashmap-modify_map_(destroy_key)_(destroy_value))_00|))
+  (public (key |(hashmap-delete_map_(destroy_key))_00|)
+          (modify map (cons (ignore (add-hint 1 "(hashmap-delete_map_(destroy_key))_0")) (call hashmap-delete (map (destroy key) |(hashmap-delete_map_(destroy_key))_00|))))
+          (drop |(hashmap-delete_map_(destroy_key))_00|)))))
+
+(contract->opcodes (append '(public) '(()) cc))
+
+; ok without pushtx
+(contract->opcodes (append '(public) '(())
+                                              (vyper-create-final
+                                               '(map)
+                                               (with-hashmap '(
+                                                               (public (key value) (verify (= (destroy value) (hashmap-lookup map (destroy key)))))
+                                                               (public (key value) (modify map (hashmap-add map (destroy key) (destroy value))))
+                                                               (public (key value) (modify map (hashmap-modify map (destroy key) (destroy value))))
+                                                               (public (key) (modify map (hashmap-delete map (destroy key))))
+                                                               )))))
 
 
 ; name system

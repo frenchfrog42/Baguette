@@ -7,10 +7,9 @@
 ; j'ai pas de let
 ; 163 faut que je push a300 pas a3
 
-; unsafe-define marche pas dans le profile
 ; je peux pas dans dans le deuxieme cas du if
+; 0 equal <=> 0equal
 
-; version where memory is collected manually
 
 ; stack used for the compilation
 (define stack '())
@@ -73,9 +72,9 @@
      (>> "OP_RSHIFT")
   ; )(rotate
      (bytes-get-first "OP_SPLIT drop0")
-     ;(bytes-get-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop1") ; todo
      (bytes-delete-first "OP_SPLIT drop1")
-     ;(bytes-delete-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop0") ; todo
+     (bytes-get-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop1") ; can be called iif opt isn't set
+     (bytes-delete-last "roll1 OP_SIZE roll2 OP_SUB OP_SPLIT drop0") ; can be called iif opt isn't set
      (+bytes "OP_CAT")
 )))
 
@@ -444,7 +443,8 @@
      ; asm
      (e #:when (string? e) (list (list e)))
      ; nil
-     (e (error (~a "Expression " e " is not recognized, sorry~~"))))))
+     (e (error (~a "Expression " e " is not recognized, sorry~~\n\n\n")))
+     )))
    ;(printf "FINN. Expr: ~a Stack: ~a~n" e stack)
   res)))
 
@@ -786,11 +786,12 @@
 (define (opcodes->size c) (foldl (lambda (e acc) (+ acc (if (opcodes? e) 1 (/ (string-length e) 2)))) 0 (string-split c " ")))
 
 (define (contract->opcodes c (keep-args-order #t))
+  (if keep-args-order '() (set! compile-function compile-function-simple))
   (set-approx #f) (set-stack '()) ; make sure approx is off and stack is empty
   (define is-contract (equal? 'contract (first c)))
   (if is-contract
       (let ()
-        (printf (~a "You are compiling a contract" (if keep-args-order "" " with a different order of args of public function") "\n"))
+        (printf (~a "You are compiling a contract\n")) ; (if keep-args-order "" " with a different order of args of public function") "\n"))
         (define res (first (compile-contract-all (cdr c) keep-args-order)))
         (define code-contract (naive-opt (ir->opcodes res)))
         (printf (~a "Size of the code: " (opcodes->size code-contract) "\n"))
