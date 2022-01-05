@@ -9,7 +9,13 @@
   (displayln (append '(public) (list stack) code))
   (define res (contract->opcodes (append '(public) (list stack) code)))
   (displayln res)
-  (if (string=? res result) '() (exit 1)))
+  (if (string=? res result) '() (error 1)))
+
+
+(test '(a) '((modify a (+ a a))) "OP_DUP OP_ADD")
+(replace-var-by-destroy-all '(+ a a) 'a)
+(replace-var-by-destroy-all '(+ a (+ a a)) 'a)
+;(exit)
 
 ; simple test
 ;(test '() '(1) "OP_1") ;todo sans arg ça fail
@@ -39,7 +45,13 @@
 (test '(a) '((modify a (+ a 1))) "OP_1ADD")
 ; 2+ use of a in modify
 (test '(a) '((modify a (+ a a))) "OP_DUP OP_ADD")
-(test '(a) '((modify a (+ a (+ a a)))) "OP_DUP OP_OVER OP_ADD OP_ADD") ; could be dup dup add add
+(test '(b a) '((modify a (+ a (+ a a)))) "OP_DUP OP_OVER OP_ADD OP_ADD") ; could be dup dup add add
+;(test '(a) '((+ (destroy a) (+ a a))) "OP_DUP OP_OVER OP_ADD OP_ADD") ; not sure if it shoudl fail or not
 
 (contract->opcodes '(public (a) "o" "i" "j" 1 "j"))
 (compile-expr-all "1")
+
+;(compile-expr-all '(cons (unsafe-define a) (modify a (+ a (+ a a)))))
+;(first (compile-expr-all '(cons (unsafe-define a) (modify a (+ a (+ a a))))))
+;(first (map naive-opt (map ir->opcodes (compile-expr-all '(cons (unsafe-define a) (modify a (+ a (+ a a))))))))
+;(argmin opcodes->size (map naive-opt (map ir->opcodes (compile-expr-all '(cons (unsafe-define a) (modify a (+ a (+ a a))))))))

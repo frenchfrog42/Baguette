@@ -312,13 +312,21 @@
                       (cons a (this b))
                       (cons res-a b))))
     (_ code)))
+(define (replace-var-by-destroy-all code var)
+  (define this (lambda (c) (replace-var-by-destroy-all c var)))
+  (match code
+    (v #:when (eq? v var) (list (list 'destroy var)))
+    ((cons a b) (append
+                 (for/list ((new-a (this a))) (cons new-a b))
+                 (for/list ((new-b (this b))) (cons a new-b))))
+    (_ '())))
 
 
 (define/contract (compile-expr-all e)
   (unconstrained-domain-> (lambda (elem) (and (list? elem) (or (empty? elem) (list? (first elem))))))
   (begin
     ;(displayln e)
-   ;(printf "Expr: ~a Stack: ~a~n" e stack)
+    ;(printf "Expr: ~a Stack: ~a~n" e stack)
    (let ((res 
    (match e
      ; int
@@ -370,22 +378,26 @@
         ; If the var isn't here, we drop the var and execute the expr
         (0 (let ((res (compile-expr-all `(cons (drop ,var) ,expr)))) (new-var var) res))
         ; then, the var is here multiple time
-        (_ (append
-            ; the first use of this variable is destroyed
-            (compile-expr-all `(cons
-                               (define tmp-var-modify ,(replace-var-by-destroy-once expr var))
-                               (define ,var (destroy tmp-var-modify))))
+        (_ (let ((res '()))
+            ; save stack because it can fail and alter the stack
+            ;(save-stack (with-handlers ([exn:fail? (lambda (_) '())])
+              ; the first use of this variable is destroyed
+            (for ((new-expr (list (first (replace-var-by-destroy-all expr var)))))
+              (save-stack (set! res (append res (compile-expr-all `(cons
+                                                                    (define tmp-var-modify ,new-expr)
+                                                                    (define ,var (destroy tmp-var-modify))))))))
             ; we use the variable a lot, and destroy it after
-            (compile-expr-all (cons* `(
-                                       (define tmp-var-modify ,expr)
-                                       (drop var)
-                                       (define ,var (destroy tmp-var-modify)))))
+            (set! res (append res (compile-expr-all (cons* `(
+                                                             (define tmp-var-modify ,expr)
+                                                             (drop ,var)
+                                                             (define ,var (destroy tmp-var-modify)))))))
             ; same but copy the variable at the top first
-            (compile-expr-all (cons* `(
-                                       (roll var)
+            (set! res (append res (compile-expr-all (cons* `(
+                                       (roll ,var)
                                        (define tmp-var-modify ,expr)
-                                       (drop var)
-                                       (define ,var (destroy tmp-var-modify)))))))))
+                                       (drop ,var)
+                                       (define ,var (destroy tmp-var-modify)))))))
+             res))))
      ; copy
      ((list 'copy var) #:when (and (symbol? var) (member var stack))
                        (list (compile-var var)))
@@ -443,7 +455,7 @@
      ; asm
      (e #:when (string? e) (list (list e)))
      ; nil
-     (e (error (~a "Expression " e " is not recognized, sorry~~\n\n\n")))
+     (e '()) ;todo -> ;(error (~a "Expression " e " is not recognized, sorry~~\n\n\n")))
      )))
    ;(printf "FINN. Expr: ~a Stack: ~a~n" e stack)
   res)))
