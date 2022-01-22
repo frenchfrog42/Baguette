@@ -189,25 +189,28 @@
   ; Here is all the way to compile it
   (append
    ; a b +
-   (save-stack (let ((un (compile-expr-all (first expr))))
-                 (push-stack)
-                 (let ((deux (compile-expr-all (second expr))))
-                   (drop-stack)
-                   (define all-comb (cartesian-product un deux))
-                   (let ((res (for/list ((e all-comb)) (append (first e) (second e) (list op))))) res))))
+   (with-handlers ([exn:fail? (lambda (_) '())])
+     (save-stack (let ((un (compile-expr-all (first expr))))
+                   (push-stack)
+                   (let ((deux (compile-expr-all (second expr))))
+                     (drop-stack)
+                     (define all-comb (cartesian-product un deux))
+                     (let ((res (for/list ((e all-comb)) (append (first e) (second e) (list op))))) res)))))
    ; b a +
-   (save-stack (let ((deux (compile-expr-all (second expr))))
-                 (push-stack)
-                 (let ((un (compile-expr-all (first expr))))
-                   (define all-comb (cartesian-product deux un))
-                   (let ((res (for/list ((e all-comb)) (append (first e) (second e) (list op))))) res))))
+   (with-handlers ([exn:fail? (lambda (_) '())])
+     (save-stack (let ((deux (compile-expr-all (second expr))))
+                   (push-stack)
+                   (let ((un (compile-expr-all (first expr))))
+                     (define all-comb (cartesian-product deux un))
+                     (let ((res (for/list ((e all-comb)) (append (first e) (second e) (list op))))) res)))))
    ; a TOALTSTACK b FROMALTSTACK +
    ; Same result as
    ; b TOALTSTACK a +
+   (with-handlers ([exn:fail? (lambda (_) '())])
    (let ((un (compile-expr-all (first expr)))
          (deux (compile-expr-all (second expr))))
      (define all-comb (cartesian-product deux un))
-     (let ((res (for/list ((e all-comb)) (append (first e) (list "OP_TOALTSTACK") (second e) (list "OP_FROMALTSTACK") (list op))))) res)))
+     (let ((res (for/list ((e all-comb)) (append (first e) (list "OP_TOALTSTACK") (second e) (list "OP_FROMALTSTACK") (list op))))) res))))
   )
 
 ; Prends une liste de liste d'option et forme le produit
@@ -382,10 +385,13 @@
             ; save stack because it can fail and alter the stack
             ;(save-stack (with-handlers ([exn:fail? (lambda (_) '())])
               ; the first use of this variable is destroyed
-            (for ((new-expr (list (first (replace-var-by-destroy-all expr var)))))
-              (save-stack (set! res (append res (compile-expr-all `(cons
-                                                                    (define tmp-var-modify ,new-expr)
-                                                                    (define ,var (destroy tmp-var-modify))))))))
+            (for ((new-expr (replace-var-by-destroy-all expr var)))
+              (begin
+                (displayln new-expr)
+              (save-stack (set! res (append res (save-stack (with-handlers ([exn:fail? (lambda (_) '())])
+                                                              (compile-expr-all `(cons
+                                                                                  (define tmp-var-modify ,new-expr)
+                                                                                  (define ,var (destroy tmp-var-modify)))))))))))
             ; we use the variable a lot, and destroy it after
             (set! res (append res (compile-expr-all (cons* `(
                                                              (define tmp-var-modify ,expr)
@@ -455,7 +461,7 @@
      ; asm
      (e #:when (string? e) (list (list e)))
      ; nil
-     (e '()) ;todo -> ;(error (~a "Expression " e " is not recognized, sorry~~\n\n\n")))
+     (e (error (~a "Expression " e " is not recognized, sorry~~\n\n\n")))
      )))
    ;(printf "FINN. Expr: ~a Stack: ~a~n" e stack)
   res)))
