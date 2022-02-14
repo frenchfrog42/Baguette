@@ -46,6 +46,7 @@
 ; 2+ use of a in modify
 (test '(a) '((modify a (+ a a))) "OP_DUP OP_ADD")
 (test '(a) '((+ a (destroy a))) "OP_DUP OP_ADD")
+;todo faire pareil sur toutes les ops
 (test '(b a) '((modify a (+ a (+ a a)))) "OP_DUP OP_OVER OP_ADD OP_ADD") ; could be dup dup add add
 ;(test '(a) '((+ (destroy a) (+ a a))) "OP_DUP OP_OVER OP_ADD OP_ADD") ; not sure if it shoudl fail or not
 
