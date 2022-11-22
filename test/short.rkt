@@ -7,7 +7,7 @@
 ; takes a stack, code, and check it's the result
 (define (test stack code result)
   (displayln (append '(public) (list stack) code))
-  (define res (contract->opcodes (append '(public) (list stack) code)))
+  (define res (contract->opcodes (append '(public) (list stack) code) #f #t))
   (displayln res)
   (if (string=? res result) '() (error 1)))
 
