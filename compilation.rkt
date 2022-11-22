@@ -17,7 +17,7 @@
 ; if the compilation is approx (if we create stack var out of thin air)
 (define approx #f)
 ; optimisation on ?
-(define opt? #t)
+(define opt? #f)
 
 (define (set-approx val)
   (set! approx val))
@@ -818,7 +818,8 @@
 (define (opcodes? c) (and (string? c) (> (string-length c) 2) (string=? (substring c 0 3) "OP_")))
 (define (opcodes->size c) (foldl (lambda (e acc) (+ acc (if (opcodes? e) 1 (/ (string-length e) 2)))) 0 (string-split c " ")))
 
-(define (contract->opcodes c (keep-args-order #t))
+(define (contract->opcodes c (keep-args-order #t) (opt?? #f))
+  (set! opt? opt??)
   (if keep-args-order '() (set! compile-function compile-function-simple))
   (set-approx #f) (set-stack '()) ; make sure approx is off and stack is empty
   (define is-contract (equal? 'contract (first c)))
