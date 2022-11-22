@@ -13,21 +13,25 @@
 
 ; stack used for the compilation
 (define stack '())
+(define stackbis '())
 ; if the compilation is approx (if we create stack var out of thin air)
 (define approx #f)
 ; optimisation on ?
-(define opt? #t)
+(define opt? #f)
 
 (define (set-approx val)
   (set! approx val))
 
 (define (compile-int n)
   (if (integer? n)
+    (if (< n 0)
+      (if (= n -1) '("OP_1NEGATE") (error "Negative numbers not supported yet"))
       (if (< n 17)
           (list (~a "OP_" n))
           (if (< n 128)
               (list (format "~a~a" (hex-int (quotient n 16)) (hex-int (remainder n 16))))
-              (list (~a (hex-int (remainder (quotient n 16) 16)) (hex-int (remainder n 16)) 0 (hex-int (quotient n 256)))))) ;malaise
+              (error "Numbers bigger than 128 aren't supported"))))
+              ;(list (~a (hex-int (remainder (quotient n 16) 16)) (hex-int (remainder n 16)) 0 (hex-int (quotient n 256)))))) ;malaise
   "wtf")) ;wtf
 
 (define (to-opcode s)
@@ -63,11 +67,14 @@
      (- "OP_SUB")
      (* "OP_MUL")
      (/ "OP_DIV")
+     (% "OP_MOD")
      (= "OP_EQUAL")
      (< "OP_LESSTHAN")
      (<= "OP_LESSTHANOREQUAL")
      (& "OP_AND")
      (&& "OP_AND") ;todo
+     (and "OP_BOOLAND")
+     (or "OP_BOOLOR")
      (<< "OP_LSHIFT")
      (>> "OP_RSHIFT")
   ; )(rotate
@@ -91,7 +98,10 @@
   (let ((res (list (~a "roll" (index-of stack var))))) (delete-var var) res))
 
 (define (new-var x)
-  (set! stack (cons x stack)))
+  (if (member x stack)
+    (begin (printf "Creation of variable ~a already in the current stack ~a. This may be invalid.
+    Remove this error if you know what you do \n" x stack) (set! stack '()))
+    (set! stack (cons x stack))))
 
 (define (delete-var x)
   (set! stack (remove x stack)))
@@ -106,11 +116,12 @@
   (set! stack s))
 
 (define-syntax-rule (save-stack e)
-  (let ((stackbis (gensym)))
-   (set! stackbis stack)
+  (let ((stackbis2 (gensym)))
+   (set! stackbis2 stack)
    (let ((res e))
-     (set! stack stackbis)
-     res)))
+    (set! stackbis stack)
+    (set! stack stackbis2)
+    res)))
 
 (define-syntax-rule (freeze-stack e)
   (let ((stackbis (gensym)))
@@ -142,6 +153,7 @@
                           ; opcodes that are a shortcort for another
                           (#rx"OP_1 OP_ADD" "OP_1ADD")
                           (#rx"OP_1 OP_SUB" "OP_1SUB")
+                          (#rx"OP_1NEGATE OP_MUL" "OP_NEGATE")
                           (#rx"OP_DROP OP_DROP" "OP_2DROP")
                           (#rx"OP_OVER OP_OVER" "OP_2DUP")
                           (#rx"OP_NOT OP_IF" "OP_NOTIF")
@@ -348,7 +360,7 @@
      ((list 'bytes-delete-last tx a) #:when (and (number? a) (negative? a)) (compile-expr-all `(bytes-delete-first ,tx ,(- a))))
      ((cons op reste) #:when (and opt? (or (eq? op 'bytes-get-last) (eq? op 'bytes-delete-last))) (compile-expr-all (list 'call op reste)))
      ; binary expression
-     ((cons op reste) #:when (eq? op '+) (compile-binary-op-all (compile-op op) reste))
+     ((cons op reste) #:when (and opt? (member op '(+ * =))) (compile-binary-op-all (compile-op op) reste))
      ((cons op reste) #:when (binary-op? op) (compile-binary-op-all-no-commute (compile-op op) reste))
      ; bytes[a:b]. Todo
      ((list 'bytes-extract bytes a b) (append
@@ -435,6 +447,8 @@
       (let* ((mycond (compile-expr-all cond))
              (mytrue (save-stack (compile-expr-all true)))
              (myfalse (compile-expr-all false)))
+        (unless (equal? (length stackbis) (length stack)) ;;(equal? stackbis stack)
+          (error "This if is unsafe, the stack is modified differently on each branch. Remove this warning if you know what you do\n" stackbis stack true false))
         (for*/list ((c mycond) (t mytrue) (f myfalse))
           (append
            c
@@ -458,6 +472,7 @@
      ('debug (begin (println (format "STAAAAAAAAACK: ~a" stack)) '(())))
      ; ignore
      ((list 'ignore a) '(()))
+     ((list 'ignore-execute a) (let ((_ (apply a '()))) '(())))
      ; asm
      (e #:when (string? e) (list (list e)))
      ; nil
@@ -825,6 +840,7 @@
               (println "Compilation without changing the number of arguments because number of args is too big")
               (set! compile-function compile-function-simple))
             '())
+        (printf (~a "\n" (length (compile-expr-all c)) "\n\n"))
         (define allcomp (map naive-opt (map ir->opcodes (compile-expr-all c)))) ; ir->opcodes and naive opt
         (set! allcomp (map (lambda (a) (if (string=? (substring a 0 2) "||") (~a "this-function-has-no-args(çatodo) " a) a)) allcomp))
         (if is-public-function
