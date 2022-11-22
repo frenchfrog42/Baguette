@@ -17,7 +17,7 @@
 ; if the compilation is approx (if we create stack var out of thin air)
 (define approx #f)
 ; optimisation on ?
-(define opt? #f)
+(define opt? #t)
 
 (define (set-approx val)
   (set! approx val))
